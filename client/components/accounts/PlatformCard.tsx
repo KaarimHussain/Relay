@@ -109,7 +109,7 @@ export function PlatformCard({ platform, compact = false }: PlatformCardProps) {
               {platform.name[0]}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-gray-800 truncate">{platform.handle ?? '@lapizly_brand'}</p>
+              <p className="text-xs font-semibold text-gray-800 truncate">{platform.handle ?? '@relay_brand'}</p>
             </div>
             <ExternalLink size={12} className="shrink-0 text-gray-400 ml-auto" />
           </div>

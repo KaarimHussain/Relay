@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Link from 'next/link';
 import { useState, useMemo } from 'react';
@@ -85,12 +85,12 @@ function RowMenu({ status, onClose }: { status: Status; onClose: () => void }) {
         </button>
       )}
       {status === 'draft' && (
-        <button onClick={onClose} className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-indigo-600 hover:bg-indigo-50 transition-colors">
+        <button onClick={onClose} className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-orange-600 hover:bg-orange-50 transition-colors">
           <Send size={13} /> Publish now
         </button>
       )}
       {status === 'failed' && (
-        <button onClick={onClose} className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-indigo-600 hover:bg-indigo-50 transition-colors">
+        <button onClick={onClose} className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-orange-600 hover:bg-orange-50 transition-colors">
           <Send size={13} /> Retry publish
         </button>
       )}
@@ -123,7 +123,7 @@ function QueueRow({
     <div
       className={cn(
         'flex items-start gap-3 px-4 py-3.5 transition-colors group',
-        selected ? 'bg-indigo-50/50' : 'hover:bg-gray-50/70'
+        selected ? 'bg-orange-50/50' : 'hover:bg-gray-50/70'
       )}
     >
       {/* Checkbox */}
@@ -132,7 +132,7 @@ function QueueRow({
           type="checkbox"
           checked={selected}
           onChange={onToggle}
-          className="w-4 h-4 rounded border-gray-300 accent-indigo-500 cursor-pointer"
+          className="w-4 h-4 rounded border-gray-300 accent-orange-500 cursor-pointer"
         />
       </div>
 
@@ -140,11 +140,11 @@ function QueueRow({
       <div
         className={cn(
           'w-10 h-10 rounded-lg shrink-0 flex items-center justify-center border border-gray-100',
-          post.hasMedia ? 'bg-indigo-50' : 'bg-gray-50'
+          post.hasMedia ? 'bg-orange-50' : 'bg-gray-50'
         )}
       >
         {post.hasMedia ? (
-          <div className="w-4 h-4 rounded bg-indigo-200" />
+          <div className="w-4 h-4 rounded bg-orange-200" />
         ) : (
           <div className="text-gray-300 text-[10px] font-bold">Aa</div>
         )}
@@ -189,7 +189,7 @@ function QueueRow({
       {/* Row actions */}
       <div className="relative shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
         {post.status === 'draft' && (
-          <button className="h-7 px-2.5 text-[11px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-md hover:bg-indigo-100 transition-colors">
+          <button className="h-7 px-2.5 text-[11px] font-medium text-orange-600 bg-orange-50 border border-orange-100 rounded-md hover:bg-orange-100 transition-colors">
             Schedule
           </button>
         )}
@@ -280,7 +280,7 @@ export function QueueView() {
       <div className="flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden">
 
         {/* Tabs */}
-        <div className="flex items-center gap-0.5 px-4 pt-3 border-b border-gray-200">
+        <div className="flex items-center gap-0.5 px-4 pt-3 border-b border-gray-200 overflow-x-auto scrollbar-none">
           {TABS.map(({ key, label }) => (
             <button
               key={key}
@@ -288,7 +288,7 @@ export function QueueView() {
               className={cn(
                 'flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium rounded-t-md -mb-px border-b-2 transition-colors',
                 activeTab === key
-                  ? 'border-indigo-500 text-indigo-600 bg-indigo-50/50'
+                  ? 'border-orange-500 text-orange-600 bg-orange-50/50'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
               )}
             >
@@ -297,7 +297,7 @@ export function QueueView() {
                 <span
                   className={cn(
                     'text-[10px] font-semibold px-1.5 py-0.5 rounded-full tabular-nums',
-                    activeTab === key ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'
+                    activeTab === key ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'
                   )}
                 >
                   {counts[key]}
@@ -308,9 +308,9 @@ export function QueueView() {
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-gray-100">
-          {/* Search */}
-          <div className="flex items-center gap-2 h-8 w-64 px-3 bg-gray-50 border border-gray-200 rounded-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-2.5 border-b border-gray-100">
+          {/* Search — full width on mobile */}
+          <div className="flex items-center gap-2 h-8 flex-1 px-3 bg-gray-50 border border-gray-200 rounded-lg">
             <Search size={13} className="text-gray-400 shrink-0" />
             <input
               type="text"
@@ -321,26 +321,18 @@ export function QueueView() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Sort */}
-            <div className="relative flex items-center">
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as SortKey)}
-                className="h-8 pl-2.5 pr-7 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-600 outline-none appearance-none cursor-pointer hover:bg-gray-50 transition-colors"
-                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
-              >
-                <option value="date-asc">Earliest first</option>
-                <option value="date-desc">Latest first</option>
-                <option value="platform">By platform</option>
-              </select>
-            </div>
-
-            {/* New post */}
-            <Link
-              href="/posts/new"
-              className="btn-clay-primary h-7.5 px-3 text-xs gap-1 font-semibold inline-flex items-center"
+          <div className="flex items-center gap-2 shrink-0">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className="h-8 flex-1 sm:flex-none pl-2.5 pr-7 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-600 outline-none appearance-none cursor-pointer hover:bg-gray-50 transition-colors"
+              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
             >
+              <option value="date-asc">Earliest first</option>
+              <option value="date-desc">Latest first</option>
+              <option value="platform">By platform</option>
+            </select>
+            <Link href="/posts/new" className="btn-clay-primary h-8 px-3 text-xs gap-1 font-semibold inline-flex items-center shrink-0">
               <Plus size={13} strokeWidth={2.5} />
               New post
             </Link>
@@ -349,23 +341,18 @@ export function QueueView() {
 
         {/* Bulk action bar */}
         {selected.size > 0 && (
-          <div className="flex items-center justify-between px-4 py-2 bg-indigo-50/80 border-b border-indigo-100">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-orange-50/80 border-b border-orange-100">
             <div className="flex items-center gap-3">
-              <span className="text-xs font-semibold text-indigo-700">
+              <span className="text-xs font-semibold text-orange-700">
                 {selected.size} post{selected.size > 1 ? 's' : ''} selected
               </span>
-              <button
-                onClick={() => setSelected(new Set())}
-                className="text-xs text-gray-500 hover:text-gray-800 transition-colors"
-              >
-                Clear
-              </button>
+              <button onClick={() => setSelected(new Set())} className="text-xs text-gray-500 hover:text-gray-800 transition-colors">Clear</button>
             </div>
-            <div className="flex items-center gap-2">
-              <button className="btn-clay-secondary h-7 px-2.5 text-xs gap-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button className="btn-clay-secondary h-7 px-2.5 text-xs gap-1 inline-flex items-center">
                 <Clock size={12} /> Reschedule
               </button>
-              <button className="btn-clay-primary h-7 px-2.5 text-xs gap-1">
+              <button className="btn-clay-primary h-7 px-2.5 text-xs gap-1 inline-flex items-center">
                 <Send size={12} /> Publish now
               </button>
               <button className="h-7 px-2.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1">
@@ -384,7 +371,7 @@ export function QueueView() {
                 checked={allSelected}
                 ref={(el) => { if (el) el.indeterminate = someSelected; }}
                 onChange={toggleAll}
-                className="w-4 h-4 rounded border-gray-300 accent-indigo-500 cursor-pointer"
+                className="w-4 h-4 rounded border-gray-300 accent-orange-500 cursor-pointer"
               />
             </div>
             <div className="w-10 shrink-0" />

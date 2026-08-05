@@ -38,7 +38,7 @@ export const PLATFORMS: PlatformDef[] = [
   {
     id: 'instagram',
     name: 'Instagram',
-    handle: '@lapizly',
+    handle: '@relay',
     description: 'Share photos, reels & stories',
     color: 'bg-gradient-to-br from-pink-500 via-rose-500 to-amber-400',
     textColor: 'text-pink-600',
@@ -48,7 +48,7 @@ export const PLATFORMS: PlatformDef[] = [
   {
     id: 'x',
     name: 'X (Twitter)',
-    handle: '@lapizly',
+    handle: '@relay',
     description: 'Post threads and updates',
     color: 'bg-gray-900',
     textColor: 'text-gray-700',
@@ -58,7 +58,7 @@ export const PLATFORMS: PlatformDef[] = [
   {
     id: 'linkedin',
     name: 'LinkedIn',
-    handle: 'Lapizly Page',
+    handle: 'Relay Page',
     description: 'Publish professional content',
     color: 'bg-blue-700',
     textColor: 'text-blue-700',
@@ -68,7 +68,7 @@ export const PLATFORMS: PlatformDef[] = [
   {
     id: 'facebook',
     name: 'Facebook',
-    handle: 'Lapizly',
+    handle: 'Relay',
     description: 'Reach your Facebook audience',
     color: 'bg-blue-600',
     textColor: 'text-blue-600',
@@ -78,7 +78,7 @@ export const PLATFORMS: PlatformDef[] = [
   {
     id: 'tiktok',
     name: 'TikTok',
-    handle: '@lapizly',
+    handle: '@relay',
     description: 'Short-form video content',
     color: 'bg-gray-950',
     textColor: 'text-gray-800',

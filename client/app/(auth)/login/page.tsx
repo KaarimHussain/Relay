@@ -1,4 +1,4 @@
-import Link from 'next/link';
+﻿import Link from 'next/link';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 
 export default function LoginPage() {
@@ -6,17 +6,17 @@ export default function LoginPage() {
     <div className="flex flex-col items-center justify-center min-h-screen py-8 px-4 bg-[#F8F9FA]">
       {/* Logo */}
       <div className="flex items-center gap-2 mb-6">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-base">
-          L
-        </div>
-        <span className="text-lg font-bold text-gray-900 tracking-tight">Lapizly</span>
+        <svg width="30" height="30" viewBox="0 0 256 256" fill="none">
+          <path d="M 128 256 L 64 256 L 64 192 L 128 192 Z M 256 256 L 192 256 L 192 192 L 256 192 Z M 64 192 L 0 192 L 0 128 L 64 128 Z M 192 192 L 128 192 L 128 128 L 192 128 Z M 128 128 L 64 128 L 64 64 L 128 64 Z M 256 128 L 192 128 L 192 64 L 256 64 Z M 64 64 L 0 64 L 0 0 L 64 0 Z M 192 64 L 128 64 L 128 0 L 192 0 Z" fill="#1A1A1A"/>
+        </svg>
+        <span className="text-lg font-bold text-gray-900 tracking-tight">Relay</span>
       </div>
 
       {/* Card */}
       <div className="w-full max-w-[380px] bg-white border border-gray-200 rounded-xl p-6 shadow-2xs">
         <div className="mb-5 text-center">
           <h1 className="text-xl font-bold text-gray-900 tracking-tight mb-0.5">Welcome back</h1>
-          <p className="text-xs text-gray-500 font-normal">Sign in to your Lapizly workspace</p>
+          <p className="text-xs text-gray-500 font-normal">Sign in to your Relay workspace</p>
         </div>
 
         {/* Google OAuth */}
@@ -51,7 +51,7 @@ export default function LoginPage() {
               name="email"
               type="email"
               placeholder="you@example.com"
-              className="h-8.5 bg-gray-50 border border-gray-200 rounded-lg text-xs px-3 font-medium outline-none focus:bg-white focus:border-indigo-500"
+              className="h-8.5 bg-gray-50 border border-gray-200 rounded-lg text-xs px-3 font-medium outline-none focus:bg-white focus:border-orange-500"
             />
           </div>
 
@@ -62,7 +62,7 @@ export default function LoginPage() {
               </label>
               <Link
                 href="/forgot-password"
-                className="text-xs text-indigo-600 font-semibold hover:underline"
+                className="text-xs text-orange-600 font-semibold hover:underline"
               >
                 Forgot?
               </Link>
@@ -82,7 +82,7 @@ export default function LoginPage() {
       {/* Footer */}
       <p className="mt-4 text-xs text-gray-500 font-medium">
         Don&apos;t have an account?{' '}
-        <Link href="/signup" className="text-indigo-600 font-semibold hover:underline">
+        <Link href="/signup" className="text-orange-600 font-semibold hover:underline">
           Sign up
         </Link>
       </p>

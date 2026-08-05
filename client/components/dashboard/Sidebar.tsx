@@ -17,6 +17,7 @@ import {
   ChevronsUpDown,
   Check,
   Plus,
+  X,
 } from 'lucide-react';
 import { CreateBrandModal } from '@/components/brands/CreateBrandModal';
 
@@ -27,7 +28,7 @@ interface Brand {
 }
 
 const DEFAULT_BRANDS: Brand[] = [
-  { id: '1', name: 'Acme Co.', color: 'bg-indigo-500' },
+  { id: '1', name: 'Acme Co.', color: 'bg-orange-500' },
   { id: '2', name: 'TechBrand Inc.', color: 'bg-emerald-500' },
 ];
 
@@ -110,7 +111,7 @@ function BrandSwitcher() {
                 <BrandAvatar brand={brand} size="sm" />
                 <span className="flex-1 min-w-0 text-xs truncate">{brand.name}</span>
                 {brand.id === activeBrand.id && (
-                  <Check size={13} className="shrink-0 text-indigo-600 stroke-[2]" />
+                  <Check size={13} className="shrink-0 text-orange-600 stroke-[2]" />
                 )}
               </button>
             ))}
@@ -119,7 +120,7 @@ function BrandSwitcher() {
 
             <button
               onClick={() => { setOpen(false); setShowCreateModal(true); }}
-              className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-xs text-indigo-600 font-semibold hover:bg-indigo-50 transition-colors"
+              className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-xs text-orange-600 font-semibold hover:bg-orange-50 transition-colors"
             >
               <Plus size={13} strokeWidth={2} />
               Add new brand
@@ -138,18 +139,38 @@ function BrandSwitcher() {
   );
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="flex flex-col w-[215px] h-screen bg-white border-r border-gray-200 shrink-0 select-none">
-
+    <aside
+      className={cn(
+        'fixed md:static inset-y-0 left-0 z-50 flex flex-col w-[215px] h-screen bg-white border-r border-gray-200 shrink-0 select-none',
+        'transition-transform duration-300 ease-in-out',
+        open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      )}
+    >
       {/* Logo */}
-      <div className="flex items-center gap-2 px-3.5 h-12 border-b border-gray-100 shrink-0">
-        <div className="flex items-center justify-center w-6.5 h-6.5 bg-indigo-600 rounded-md text-white font-bold text-xs">
-          L
+      <div className="flex items-center justify-between gap-2 px-3.5 h-12 border-b border-gray-100 shrink-0">
+        <div className="flex items-center gap-2">
+          <svg width="28" height="28" viewBox="0 0 256 256" fill="none">
+            <path d="M 128 256 L 64 256 L 64 192 L 128 192 Z M 256 256 L 192 256 L 192 192 L 256 192 Z M 64 192 L 0 192 L 0 128 L 64 128 Z M 192 192 L 128 192 L 128 128 L 192 128 Z M 128 128 L 64 128 L 64 64 L 128 64 Z M 256 128 L 192 128 L 192 64 L 256 64 Z M 64 64 L 0 64 L 0 0 L 64 0 Z M 192 64 L 128 64 L 128 0 L 192 0 Z" fill="#1A1A1A"/>
+          </svg>
+          <span className="text-gray-900 font-bold text-base tracking-tight">Relay</span>
         </div>
-        <span className="text-gray-900 font-bold text-sm tracking-tight">Lapizly</span>
+        {/* Close button — mobile only */}
+        <button
+          onClick={onClose}
+          className="md:hidden p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+          aria-label="Close sidebar"
+        >
+          <X size={16} />
+        </button>
       </div>
 
       {/* Brand switcher */}
@@ -165,29 +186,30 @@ export function Sidebar() {
             <Link
               key={item.label}
               href={item.href}
+              onClick={onClose}
               className={cn(
                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors relative group',
                 isActive
-                  ? 'bg-indigo-50/80 text-indigo-600 font-semibold'
+                  ? 'bg-orange-50/80 text-orange-600 font-semibold'
                   : item.ai
-                  ? 'text-violet-600 hover:bg-violet-50/60'
+                  ? 'text-orange-600 hover:bg-orange-50/60'
                   : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-900'
               )}
             >
               {isActive && (
-                <span className="w-1 h-3.5 bg-indigo-600 rounded-r-full absolute left-0 top-1/2 -translate-y-1/2" />
+                <span className="w-1 h-3.5 bg-orange-600 rounded-r-full absolute left-0 top-1/2 -translate-y-1/2" />
               )}
               <item.icon
                 size={15}
                 strokeWidth={isActive ? 2 : 1.75}
                 className={cn(
                   'shrink-0',
-                  isActive ? 'text-indigo-600' : item.ai ? 'text-violet-500' : 'text-gray-400 group-hover:text-gray-600'
+                  isActive ? 'text-orange-600' : item.ai ? 'text-orange-500' : 'text-gray-400 group-hover:text-gray-600'
                 )}
               />
               <span className="flex-1 truncate">{item.label}</span>
               {item.ai && (
-                <span className="inline-flex items-center px-1 py-0.2 text-[9px] font-bold bg-violet-100 text-violet-700 rounded">
+                <span className="inline-flex items-center px-1 py-0.2 text-[9px] font-bold bg-orange-100 text-orange-700 rounded">
                   AI
                 </span>
               )}
@@ -201,15 +223,16 @@ export function Sidebar() {
         <div className="h-px bg-gray-100 mb-1.5" />
         <Link
           href="/settings"
+          onClick={onClose}
           className={cn(
             'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors relative',
             pathname === '/settings'
-              ? 'bg-indigo-50/80 text-indigo-600 font-semibold'
+              ? 'bg-orange-50/80 text-orange-600 font-semibold'
               : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-900'
           )}
         >
           {pathname === '/settings' && (
-            <span className="w-1 h-3.5 bg-indigo-600 rounded-r-full absolute left-0 top-1/2 -translate-y-1/2" />
+            <span className="w-1 h-3.5 bg-orange-600 rounded-r-full absolute left-0 top-1/2 -translate-y-1/2" />
           )}
           <Settings size={15} strokeWidth={1.75} className="shrink-0 text-gray-400" />
           <span>Settings</span>

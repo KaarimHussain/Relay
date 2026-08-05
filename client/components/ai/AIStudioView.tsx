@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import {
@@ -153,7 +153,7 @@ function CaptionWriter() {
             onChange={e => setTopic(e.target.value)}
             placeholder="e.g. Launching our new AI scheduling feature…"
             rows={2.5}
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-xs text-gray-800 placeholder:text-gray-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-colors resize-none leading-relaxed"
+            className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-xs text-gray-800 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors resize-none leading-relaxed"
           />
         </div>
 
@@ -194,7 +194,7 @@ function CaptionWriter() {
         <div className="flex flex-col gap-3 animate-in fade-in duration-150">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-              <Sparkles size={13} className="text-indigo-600" />
+              <Sparkles size={13} className="text-orange-600" />
               Generated Captions ({tone} · {platform})
             </p>
             <button
@@ -284,7 +284,7 @@ function ContentIdeas() {
             {pillars.map(p => (
               <span
                 key={p}
-                className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-medium"
+                className="inline-flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-0.5 rounded text-xs font-medium"
               >
                 {p}
                 <button onClick={() => setPillars(prev => prev.filter(x => x !== p))}>
@@ -318,7 +318,7 @@ function ContentIdeas() {
             <div key={i} className="bg-white border border-gray-200 rounded-xl p-3.5 flex flex-col justify-between gap-2.5 shadow-2xs">
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{idea.theme}</span>
+                  <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">{idea.theme}</span>
                   <span className="text-[11px] font-medium text-gray-400">{idea.platform}</span>
                 </div>
                 <p className="text-xs font-bold text-gray-900 leading-snug">{idea.title}</p>
@@ -383,7 +383,7 @@ function HashtagFinder() {
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {tags.map(t => (
-                  <span key={t} className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-medium">
+                  <span key={t} className="bg-orange-50 text-orange-700 px-2 py-0.5 rounded text-xs font-medium">
                     {t}
                   </span>
                 ))}
@@ -422,13 +422,13 @@ export function AIStudioView() {
               className={cn(
                 'bg-white border rounded-xl p-3.5 flex items-center gap-3 text-left transition-colors cursor-pointer shadow-2xs',
                 isActive
-                  ? 'border-indigo-500 bg-indigo-50/40 ring-1 ring-indigo-500/20'
+                  ? 'border-orange-500 bg-orange-50/40 ring-1 ring-orange-500/20'
                   : 'border-gray-200 hover:border-gray-300'
               )}
             >
               <div className={cn(
                 'flex items-center justify-center w-8 h-8 rounded-lg shrink-0',
-                isActive ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'
+                isActive ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-500'
               )}>
                 <Icon size={15} />
               </div>

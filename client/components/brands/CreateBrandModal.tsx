@@ -1,6 +1,7 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -44,11 +45,11 @@ export function CreateBrandModal({ onClose, onCreated }: CreateBrandModalProps) 
 
   const initials = name.trim().slice(0, 2).toUpperCase() || '?';
 
-  return (
+  const modal = (
     <div
       ref={overlayRef}
       onClick={handleOverlayClick}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-[2px]"
     >
       <div className="w-full max-w-[420px] bg-white rounded-xl border border-gray-200 shadow-xl mx-4">
         {/* Header */}
@@ -91,7 +92,7 @@ export function CreateBrandModal({ onClose, onCreated }: CreateBrandModalProps) 
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Acme Co."
                 maxLength={40}
-                className="w-full h-[38px] px-3 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-colors"
+                className="w-full h-[38px] px-3 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors"
               />
             </div>
 
@@ -123,14 +124,14 @@ export function CreateBrandModal({ onClose, onCreated }: CreateBrandModalProps) 
             <button
               type="button"
               onClick={onClose}
-              className="h-[34px] px-4 text-[13px] font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="btn-clay-secondary h-[34px] px-4 text-[13px]"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!name.trim()}
-              className="h-[34px] px-4 text-[13px] font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="btn-clay-primary h-[34px] px-4 text-[13px] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Create brand
             </button>
@@ -139,4 +140,6 @@ export function CreateBrandModal({ onClose, onCreated }: CreateBrandModalProps) 
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }

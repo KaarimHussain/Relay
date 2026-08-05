@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { TrendingUp, TrendingDown, Eye, Heart, Users, Zap } from 'lucide-react';
@@ -329,7 +329,7 @@ export function AnalyticsView() {
               onClick={() => setActiveMetric(key)}
               className={cn(
                 'bg-white border rounded-xl p-3 flex flex-col gap-2 text-left transition-colors shadow-2xs cursor-pointer',
-                isActive ? 'border-indigo-500 bg-indigo-50/30 ring-1 ring-indigo-500/20' : 'border-gray-200 hover:border-gray-300'
+                isActive ? 'border-orange-500 bg-orange-50/30 ring-1 ring-orange-500/20' : 'border-gray-200 hover:border-gray-300'
               )}
             >
               <div className="flex items-center justify-between gap-1">
@@ -364,7 +364,11 @@ export function AnalyticsView() {
           </h3>
           <span className="text-xs font-semibold text-gray-500">Last {period} days</span>
         </div>
-        <AreaChart values={activeSeries} color={activeColor} labels={labels} />
+        <div className="overflow-x-auto">
+          <div className="min-w-[480px]">
+            <AreaChart values={activeSeries} color={activeColor} labels={labels} />
+          </div>
+        </div>
       </div>
 
       {/* Bottom Grid */}

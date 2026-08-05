@@ -1,4 +1,4 @@
-import Link from 'next/link';
+﻿import Link from 'next/link';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 
 export default function SignupPage() {
@@ -6,10 +6,10 @@ export default function SignupPage() {
     <div className="flex flex-col items-center justify-center min-h-screen py-8 px-4 bg-[#F8F9FA]">
       {/* Logo */}
       <div className="flex items-center gap-2 mb-6">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-base">
-          L
-        </div>
-        <span className="text-lg font-bold text-gray-900 tracking-tight">Lapizly</span>
+        <svg width="30" height="30" viewBox="0 0 256 256" fill="none">
+          <path d="M 128 256 L 64 256 L 64 192 L 128 192 Z M 256 256 L 192 256 L 192 192 L 256 192 Z M 64 192 L 0 192 L 0 128 L 64 128 Z M 192 192 L 128 192 L 128 128 L 192 128 Z M 128 128 L 64 128 L 64 64 L 128 64 Z M 256 128 L 192 128 L 192 64 L 256 64 Z M 64 64 L 0 64 L 0 0 L 64 0 Z M 192 64 L 128 64 L 128 0 L 192 0 Z" fill="#1A1A1A"/>
+        </svg>
+        <span className="text-lg font-bold text-gray-900 tracking-tight">Relay</span>
       </div>
 
       {/* Card */}
@@ -51,7 +51,7 @@ export default function SignupPage() {
               name="name"
               type="text"
               placeholder="Alex Johnson"
-              className="h-8.5 bg-gray-50 border border-gray-200 rounded-lg text-xs px-3 font-medium outline-none focus:bg-white focus:border-indigo-500"
+              className="h-8.5 bg-gray-50 border border-gray-200 rounded-lg text-xs px-3 font-medium outline-none focus:bg-white focus:border-orange-500"
             />
           </div>
 
@@ -64,7 +64,7 @@ export default function SignupPage() {
               name="email"
               type="email"
               placeholder="you@example.com"
-              className="h-8.5 bg-gray-50 border border-gray-200 rounded-lg text-xs px-3 font-medium outline-none focus:bg-white focus:border-indigo-500"
+              className="h-8.5 bg-gray-50 border border-gray-200 rounded-lg text-xs px-3 font-medium outline-none focus:bg-white focus:border-orange-500"
             />
           </div>
 
@@ -88,7 +88,7 @@ export default function SignupPage() {
       {/* Footer */}
       <p className="mt-4 text-xs text-gray-500 font-medium">
         Already have an account?{' '}
-        <Link href="/login" className="text-indigo-600 font-semibold hover:underline">
+        <Link href="/login" className="text-orange-600 font-semibold hover:underline">
           Sign in
         </Link>
       </p>

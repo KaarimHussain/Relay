@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef } from 'react';
 import {
@@ -61,8 +61,8 @@ function TextInput({
 function SaveBar({ dirty, onSave, onDiscard }: { dirty: boolean; onSave: () => void; onDiscard: () => void }) {
   if (!dirty) return null;
   return (
-    <div className="flex items-center justify-between px-5 py-3 bg-indigo-50/90 border border-indigo-200/80 rounded-2xl shadow-xs">
-      <p className="text-xs font-bold text-indigo-700">You have unsaved changes</p>
+    <div className="flex items-center justify-between px-5 py-3 bg-orange-50/90 border border-orange-200/80 rounded-2xl shadow-xs">
+      <p className="text-xs font-bold text-orange-700">You have unsaved changes</p>
       <div className="flex items-center gap-2">
         <button
           onClick={onDiscard}
@@ -92,7 +92,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       onClick={() => onChange(!checked)}
       className={cn(
         'relative w-9 h-5 rounded-full transition-colors shrink-0',
-        checked ? 'bg-indigo-500' : 'bg-gray-200'
+        checked ? 'bg-orange-500' : 'bg-gray-200'
       )}
     >
       <span
@@ -131,7 +131,7 @@ function NotifRow({
 
 function ProfileTab() {
   const [name, setName] = useState('Alex Johnson');
-  const [email, setEmail] = useState('alex@lapizly.com');
+  const [email, setEmail] = useState('alex@relay.app');
   const [bio, setBio] = useState('');
   const [saved, setSaved] = useState({ name, email, bio });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -152,7 +152,7 @@ function ProfileTab() {
       {/* Avatar */}
       <div className="flex items-center gap-5 pb-6 border-b border-gray-100">
         <div className="relative">
-          <div className="w-16 h-16 rounded-full bg-indigo-500 flex items-center justify-center text-white text-[22px] font-bold overflow-hidden">
+          <div className="w-16 h-16 rounded-full bg-orange-500 flex items-center justify-center text-white text-[22px] font-bold overflow-hidden">
             {avatar
               ? <img src={avatar} alt="" className="w-full h-full object-cover" />
               : name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -169,7 +169,7 @@ function ProfileTab() {
         <div>
           <p className="text-[14px] font-semibold text-gray-900">{saved.name}</p>
           <p className="text-[13px] text-gray-400">{saved.email}</p>
-          <button onClick={() => fileRef.current?.click()} className="text-[12px] text-indigo-500 hover:text-indigo-600 mt-1 transition-colors">
+          <button onClick={() => fileRef.current?.click()} className="text-[12px] text-orange-500 hover:text-orange-600 mt-1 transition-colors">
             Change photo
           </button>
         </div>
@@ -191,7 +191,7 @@ function ProfileTab() {
           onChange={e => setBio(e.target.value.slice(0, 160))}
           placeholder="Tell us a bit about yourself…"
           rows={3}
-          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-colors resize-none"
+          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors resize-none"
         />
         <p className="text-[11px] text-gray-400 text-right -mt-1">{bio.length}/160</p>
       </Field>
@@ -211,7 +211,7 @@ function ProfileTab() {
           <Field label="Confirm new password">
             <TextInput type="password" placeholder="••••••••" />
           </Field>
-          <button className="self-start h-9 px-4 text-[13px] font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition-colors">
+          <button className="self-start h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors">
             Update password
           </button>
         </div>
@@ -293,13 +293,13 @@ function BrandTab() {
       <div className="pt-4 border-t border-gray-100">
         <div className="flex items-center justify-between mb-3">
           <p className="text-[15px] font-semibold text-gray-900">Connected accounts</p>
-          <a href="/accounts" className="text-[13px] text-indigo-500 hover:text-indigo-600 flex items-center gap-1 transition-colors">
+          <a href="/accounts" className="text-[13px] text-orange-500 hover:text-orange-600 flex items-center gap-1 transition-colors">
             Manage <ChevronRight size={13} />
           </a>
         </div>
         {[
-          { name: 'Instagram', handle: '@lapizly', color: 'bg-pink-500' },
-          { name: 'LinkedIn',  handle: 'Lapizly Page', color: 'bg-blue-700' },
+          { name: 'Instagram', handle: '@relay', color: 'bg-pink-500' },
+          { name: 'LinkedIn',  handle: 'Relay Page', color: 'bg-blue-700' },
         ].map(acc => (
           <div key={acc.name} className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
             <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold', acc.color)}>
@@ -351,7 +351,7 @@ function NotificationsTab() {
     <div className="flex flex-col">
       <div className="pb-4 mb-2 border-b border-gray-100">
         <p className="text-[15px] font-semibold text-gray-900">Email notifications</p>
-        <p className="text-[13px] text-gray-400 mt-0.5">Choose which emails you receive from Lapizly.</p>
+        <p className="text-[13px] text-gray-400 mt-0.5">Choose which emails you receive from Relay.</p>
       </div>
       <div className="divide-y divide-gray-100">
         <NotifRow label="Post published" description="When a scheduled post goes live successfully." checked={prefs.postPublished} onChange={set('postPublished')} />
@@ -392,7 +392,7 @@ function BillingTab() {
         </div>
         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div
-            className={cn('h-full rounded-full transition-all', warn ? 'bg-amber-400' : 'bg-indigo-400')}
+            className={cn('h-full rounded-full transition-all', warn ? 'bg-amber-400' : 'bg-orange-400')}
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -403,17 +403,17 @@ function BillingTab() {
   return (
     <div className="flex flex-col gap-6">
       {/* Current plan card */}
-      <div className="flex items-start justify-between p-5 bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100 rounded-xl">
+      <div className="flex items-start justify-between p-5 bg-gradient-to-br from-orange-50 to-orange-50 border border-orange-100 rounded-xl">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[11px] font-semibold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
               Free plan
             </span>
           </div>
           <p className="text-[22px] font-bold text-gray-900">$0 <span className="text-[14px] font-normal text-gray-400">/ month</span></p>
           <p className="text-[13px] text-gray-500 mt-1">1 brand · 5 accounts · 100 posts/mo</p>
         </div>
-        <button className="h-9 px-4 text-[13px] font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition-colors flex items-center gap-1.5">
+        <button className="h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-1.5">
           <Zap size={14} /> Upgrade to Pro
         </button>
       </div>
@@ -430,7 +430,7 @@ function BillingTab() {
       <div className="flex items-start justify-between p-5 bg-white border border-gray-200 rounded-xl">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Zap size={15} className="text-indigo-500" />
+            <Zap size={15} className="text-orange-500" />
             <span className="text-[15px] font-semibold text-gray-900">Pro plan</span>
           </div>
           <p className="text-[22px] font-bold text-gray-900">$29 <span className="text-[14px] font-normal text-gray-400">/ month</span></p>
@@ -444,13 +444,13 @@ function BillingTab() {
               'Priority support',
             ].map(f => (
               <li key={f} className="flex items-center gap-2 text-[13px] text-gray-600">
-                <Check size={13} className="text-indigo-500 shrink-0" />
+                <Check size={13} className="text-orange-500 shrink-0" />
                 {f}
               </li>
             ))}
           </ul>
         </div>
-        <button className="shrink-0 h-9 px-4 text-[13px] font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition-colors">
+        <button className="shrink-0 h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors">
           Upgrade now
         </button>
       </div>
@@ -459,7 +459,7 @@ function BillingTab() {
       <div className="p-5 bg-white border border-gray-200 rounded-xl">
         <div className="flex items-center justify-between mb-4">
           <p className="text-[15px] font-semibold text-gray-900">Billing information</p>
-          <button className="text-[13px] text-indigo-500 hover:text-indigo-600 transition-colors">Edit</button>
+          <button className="text-[13px] text-orange-500 hover:text-orange-600 transition-colors">Edit</button>
         </div>
         <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
           <div className="w-9 h-6 bg-gray-200 rounded flex items-center justify-center">
@@ -469,7 +469,7 @@ function BillingTab() {
             <p className="text-[13px] font-medium text-gray-700">No payment method added</p>
             <p className="text-[12px] text-gray-400">Add a card to upgrade your plan</p>
           </div>
-          <button className="ml-auto text-[12px] font-medium text-indigo-600 hover:text-indigo-700 transition-colors">
+          <button className="ml-auto text-[12px] font-medium text-orange-600 hover:text-orange-700 transition-colors">
             Add card
           </button>
         </div>
@@ -478,7 +478,7 @@ function BillingTab() {
       {/* Security note */}
       <div className="flex items-center gap-2 text-[12px] text-gray-400">
         <Shield size={13} />
-        Payments are processed securely via Stripe. Lapizly never stores your card details.
+        Payments are processed securely via Stripe. Relay never stores your card details.
       </div>
     </div>
   );
@@ -501,14 +501,14 @@ interface Member {
 
 const ROLE_CONFIG: Record<Role, { label: string; desc: string; icon: typeof Crown; color: string }> = {
   owner:  { label: 'Owner',  desc: 'Full access including billing and brand deletion', icon: Crown,  color: 'text-amber-600 bg-amber-50 border-amber-200'   },
-  admin:  { label: 'Admin',  desc: 'All content access plus team management',          icon: Shield, color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+  admin:  { label: 'Admin',  desc: 'All content access plus team management',          icon: Shield, color: 'text-orange-600 bg-orange-50 border-orange-200' },
   editor: { label: 'Editor', desc: 'Create, edit, and schedule posts',                 icon: Pencil, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
   viewer: { label: 'Viewer', desc: 'Read-only access to posts and analytics',          icon: Eye,    color: 'text-gray-600 bg-gray-100 border-gray-200'      },
 };
 
 const INITIAL_MEMBERS: Member[] = [
-  { id: '1', name: 'Alex Johnson',  email: 'alex@lapizly.com',   role: 'owner',  avatar: 'AJ', color: 'bg-indigo-500', joinedAt: 'Jan 12, 2025', status: 'active'  },
-  { id: '2', name: 'Sara Kim',      email: 'sara@acmeco.com',    role: 'admin',  avatar: 'SK', color: 'bg-violet-500', joinedAt: 'Feb 3, 2025',  status: 'active'  },
+  { id: '1', name: 'Alex Johnson',  email: 'alex@relay.app',   role: 'owner',  avatar: 'AJ', color: 'bg-orange-500', joinedAt: 'Jan 12, 2025', status: 'active'  },
+  { id: '2', name: 'Sara Kim',      email: 'sara@acmeco.com',    role: 'admin',  avatar: 'SK', color: 'bg-orange-500', joinedAt: 'Feb 3, 2025',  status: 'active'  },
   { id: '3', name: 'Marcus Reed',   email: 'marcus@acmeco.com',  role: 'editor', avatar: 'MR', color: 'bg-emerald-500',joinedAt: 'Mar 18, 2025', status: 'active'  },
 ];
 
@@ -591,7 +591,7 @@ function MemberRow({
                     <p className="text-[13px] font-medium text-gray-800">{cfg.label}</p>
                     <p className="text-[11px] text-gray-400">{cfg.desc}</p>
                   </div>
-                  {member.role === r && <Check size={13} className="ml-auto text-indigo-500 shrink-0 mt-0.5" />}
+                  {member.role === r && <Check size={13} className="ml-auto text-orange-500 shrink-0 mt-0.5" />}
                 </button>
               );
             })}
@@ -685,7 +685,7 @@ function TeamTab() {
         <button
           onClick={() => setShowInviteForm(v => !v)}
           disabled={seatsUsed >= seatsMax}
-          className="flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <UserPlus size={14} /> Invite member
         </button>
@@ -695,22 +695,22 @@ function TeamTab() {
       <div className="flex flex-col gap-1.5">
         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div
-            className="h-full bg-indigo-400 rounded-full transition-all"
+            className="h-full bg-orange-400 rounded-full transition-all"
             style={{ width: `${Math.min((seatsUsed / seatsMax) * 100, 100)}%` }}
           />
         </div>
         <p className="text-[11px] text-gray-400">
           {seatsMax - seatsUsed} seat{seatsMax - seatsUsed !== 1 ? 's' : ''} remaining.{' '}
-          <button className="text-indigo-500 hover:text-indigo-600 transition-colors">Upgrade to add more.</button>
+          <button className="text-orange-500 hover:text-orange-600 transition-colors">Upgrade to add more.</button>
         </p>
       </div>
 
       {/* Invite form */}
       {showInviteForm && (
-        <div className="flex flex-col gap-3 p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
-          <p className="text-[13px] font-semibold text-indigo-700">Invite a teammate</p>
+        <div className="flex flex-col gap-3 p-4 bg-orange-50 border border-orange-100 rounded-xl">
+          <p className="text-[13px] font-semibold text-orange-700">Invite a teammate</p>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 flex-1 h-[38px] px-3 bg-white border border-gray-200 rounded-lg focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-colors">
+            <div className="flex items-center gap-2 flex-1 h-[38px] px-3 bg-white border border-gray-200 rounded-lg focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/10 transition-colors">
               <Mail size={13} className="text-gray-400 shrink-0" />
               <input
                 type="email"
@@ -742,7 +742,7 @@ function TeamTab() {
                 'h-[38px] px-4 text-[13px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shrink-0',
                 inviteSent
                   ? 'bg-emerald-500 text-white'
-                  : 'bg-indigo-500 hover:bg-indigo-600 text-white disabled:opacity-40'
+                  : 'bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40'
               )}
             >
               {inviteSent ? <><Check size={13} /> Sent!</> : 'Send invite'}
@@ -766,13 +766,13 @@ function TeamTab() {
                   onClick={() => setInviteRole(r)}
                   className={cn(
                     'flex flex-col gap-1 p-2.5 rounded-lg border cursor-pointer transition-colors',
-                    inviteRole === r ? 'bg-white border-indigo-200' : 'bg-white/50 border-transparent hover:border-gray-200'
+                    inviteRole === r ? 'bg-white border-orange-200' : 'bg-white/50 border-transparent hover:border-gray-200'
                   )}
                 >
                   <div className="flex items-center gap-1.5">
                     <cfg.icon size={12} className="text-gray-400" />
                     <span className="text-[12px] font-semibold text-gray-700">{cfg.label}</span>
-                    {inviteRole === r && <Check size={10} className="text-indigo-500 ml-auto" />}
+                    {inviteRole === r && <Check size={10} className="text-orange-500 ml-auto" />}
                   </div>
                   <p className="text-[11px] text-gray-400 leading-snug">{cfg.desc}</p>
                 </div>
@@ -816,7 +816,7 @@ function TeamTab() {
                 </div>
                 <RoleBadge role={invite.role} />
                 <div className="flex items-center gap-2 shrink-0">
-                  <button className="text-[12px] font-medium text-indigo-500 hover:text-indigo-600 transition-colors">
+                  <button className="text-[12px] font-medium text-orange-500 hover:text-orange-600 transition-colors">
                     Resend
                   </button>
                   <button
@@ -878,7 +878,7 @@ export function SettingsView() {
             className={cn(
               'flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-left transition-colors',
               tab === key
-                ? 'bg-indigo-50 text-indigo-600'
+                ? 'bg-orange-50 text-orange-600'
                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
             )}
           >

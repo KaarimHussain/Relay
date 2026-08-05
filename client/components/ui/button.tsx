@@ -1,4 +1,4 @@
-import * as React from "react"
+﻿import * as React from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
@@ -22,7 +22,7 @@ const buttonVariants = cva(
           "text-gray-600 hover:bg-gray-100/80 hover:text-gray-900 rounded-xl active:bg-gray-200/60",
         destructive:
           "bg-red-500 hover:bg-red-600 text-white border border-red-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),_0_2px_4px_rgba(220,38,38,0.2)] rounded-xl",
-        link: "text-indigo-600 underline-offset-4 hover:underline font-semibold",
+        link: "text-orange-600 underline-offset-4 hover:underline font-semibold",
       },
       size: {
         default: "h-9 px-4 py-2 text-xs md:text-sm rounded-xl gap-2",

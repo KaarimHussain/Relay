@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import {
@@ -63,7 +63,7 @@ function SchedulePicker({
             className={cn(
               'flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium border transition-colors',
               mode === value
-                ? 'bg-indigo-50 border-indigo-200 text-indigo-600'
+                ? 'bg-orange-50 border-orange-200 text-orange-600'
                 : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
             )}
           >
@@ -80,7 +80,7 @@ function SchedulePicker({
             type="datetime-local"
             value={date}
             onChange={(e) => onDateChange(e.target.value)}
-            className="h-8 px-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[12px] text-gray-700 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 transition-colors"
+            className="h-8 px-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[12px] text-gray-700 outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400/20 transition-colors"
           />
         </div>
       )}
@@ -274,7 +274,7 @@ export function PostComposer({ onClose }: PostComposerProps) {
                   type="button"
                   onClick={handleAiGenerate}
                   disabled={aiLoading}
-                  className="flex items-center gap-1.5 h-7 px-2.5 text-[12px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-md hover:bg-indigo-100 transition-colors disabled:opacity-60"
+                  className="flex items-center gap-1.5 h-7 px-2.5 text-[12px] font-medium text-orange-600 bg-orange-50 border border-orange-100 rounded-md hover:bg-orange-100 transition-colors disabled:opacity-60"
                 >
                   <Sparkles size={12} />
                   {aiLoading ? 'Generating…' : 'Write with AI'}
@@ -287,7 +287,7 @@ export function PostComposer({ onClose }: PostComposerProps) {
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   placeholder="What do you want to share?"
-                  className="w-full min-h-[120px] px-3.5 pt-3 pb-8 bg-gray-50 border border-gray-200 rounded-xl text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-colors resize-none leading-relaxed"
+                  className="w-full min-h-[120px] px-3.5 pt-3 pb-8 bg-gray-50 border border-gray-200 rounded-xl text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors resize-none leading-relaxed"
                 />
                 <div className={cn('absolute bottom-2.5 right-3 text-[11px]', charColor)}>
                   {caption.length} / {lowestLimit.toLocaleString()}
@@ -296,9 +296,9 @@ export function PostComposer({ onClose }: PostComposerProps) {
 
               {/* AI suggestions */}
               {showAiSuggestions && (
-                <div className="flex flex-col gap-2 p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl">
+                <div className="flex flex-col gap-2 p-3 bg-orange-50/60 border border-orange-100 rounded-xl">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-[12px] font-medium text-indigo-600 flex items-center gap-1">
+                    <p className="text-[12px] font-medium text-orange-600 flex items-center gap-1">
                       <Sparkles size={11} />
                       AI suggestions — pick one
                     </p>
@@ -315,7 +315,7 @@ export function PostComposer({ onClose }: PostComposerProps) {
                       key={i}
                       type="button"
                       onClick={() => applyAiSuggestion(s)}
-                      className="text-left text-[12px] text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-2.5 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors line-clamp-2"
+                      className="text-left text-[12px] text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-2.5 hover:border-orange-300 hover:bg-orange-50/40 transition-colors line-clamp-2"
                     >
                       {s}
                     </button>
@@ -356,14 +356,14 @@ export function PostComposer({ onClose }: PostComposerProps) {
                 className={cn(
                   'flex flex-col items-center justify-center gap-2 h-24 border-2 border-dashed rounded-xl cursor-pointer transition-colors',
                   dragOver
-                    ? 'border-indigo-400 bg-indigo-50'
+                    ? 'border-orange-400 bg-orange-50'
                     : 'border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100'
                 )}
               >
                 <ImageIcon size={20} className="text-gray-300" />
                 <p className="text-[12px] text-gray-400">
                   Drop images here, or{' '}
-                  <span className="text-indigo-500 font-medium">browse</span>
+                  <span className="text-orange-500 font-medium">browse</span>
                 </p>
                 <p className="text-[11px] text-gray-300">PNG, JPG, GIF up to 10MB</p>
               </div>
@@ -395,7 +395,7 @@ export function PostComposer({ onClose }: PostComposerProps) {
                       </span>
                       <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                         <div
-                          className={cn('h-full rounded-full transition-all', over ? 'bg-red-500' : 'bg-indigo-400')}
+                          className={cn('h-full rounded-full transition-all', over ? 'bg-red-500' : 'bg-orange-400')}
                           style={{ width: `${pct}%` }}
                         />
                       </div>

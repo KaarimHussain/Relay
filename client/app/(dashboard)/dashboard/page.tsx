@@ -1,4 +1,4 @@
-import { StatCard } from '@/components/dashboard/StatCard';
+﻿import { StatCard } from '@/components/dashboard/StatCard';
 import { PostTable } from '@/components/dashboard/PostTable';
 import { FileText, Calendar, TrendingUp, Users, Sparkles } from 'lucide-react';
 
@@ -8,8 +8,8 @@ const stats = [
     value: '142',
     change: '+12 this week',
     changeType: 'positive' as const,
-    icon: <FileText size={15} className="text-indigo-600" />,
-    iconBg: 'bg-indigo-50',
+    icon: <FileText size={15} className="text-orange-600" />,
+    iconBg: 'bg-orange-50',
   },
   {
     label: 'Scheduled Posts',
@@ -32,8 +32,8 @@ const stats = [
     value: '24.3K',
     change: '+310 this month',
     changeType: 'positive' as const,
-    icon: <Users size={15} className="text-violet-600" />,
-    iconBg: 'bg-violet-50',
+    icon: <Users size={15} className="text-orange-600" />,
+    iconBg: 'bg-orange-50',
   },
 ];
 
@@ -47,8 +47,8 @@ export default function DashboardPage() {
           <p className="text-xs text-gray-500 mt-0.5">Here&apos;s what&apos;s happening with your connected brands today.</p>
         </div>
 
-        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50/80 text-indigo-700 rounded-md border border-indigo-100 text-xs font-semibold">
-          <Sparkles size={13} className="text-indigo-600" />
+        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-orange-50/80 text-orange-700 rounded-md border border-orange-100 text-xs font-semibold">
+          <Sparkles size={13} className="text-orange-600" />
           <span>Auto-Scheduler Active</span>
         </div>
       </div>

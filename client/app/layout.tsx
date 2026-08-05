@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lapizly — AI Social Media Management",
+  title: "Relay — AI Social Media Management",
   description: "Schedule, publish, and analyze your social media content with AI.",
 };
 

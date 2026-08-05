@@ -1,4 +1,4 @@
-import Link from 'next/link';
+﻿import Link from 'next/link';
 import { PlatformCard } from '@/components/accounts/PlatformCard';
 import { PLATFORMS } from '@/components/accounts/platforms';
 
@@ -7,22 +7,22 @@ export default function OnboardingAccountsPage() {
     <div className="flex flex-col items-center justify-center min-h-screen py-8 px-4 bg-[#F8F9FA]">
       {/* Logo */}
       <div className="flex items-center gap-2 mb-6">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-base">
-          L
-        </div>
-        <span className="text-lg font-bold text-gray-900 tracking-tight">Lapizly</span>
+        <svg width="30" height="30" viewBox="0 0 256 256" fill="none">
+          <path d="M 128 256 L 64 256 L 64 192 L 128 192 Z M 256 256 L 192 256 L 192 192 L 256 192 Z M 64 192 L 0 192 L 0 128 L 64 128 Z M 192 192 L 128 192 L 128 128 L 192 128 Z M 128 128 L 64 128 L 64 64 L 128 64 Z M 256 128 L 192 128 L 192 64 L 256 64 Z M 64 64 L 0 64 L 0 0 L 64 0 Z M 192 64 L 128 64 L 128 0 L 192 0 Z" fill="#1A1A1A"/>
+        </svg>
+        <span className="text-lg font-bold text-gray-900 tracking-tight">Relay</span>
       </div>
 
       {/* Steps indicator */}
       <div className="flex items-center gap-2 mb-5">
         <div className="flex items-center gap-1.5 opacity-60">
-          <div className="w-5.5 h-5.5 rounded-full bg-indigo-600 flex items-center justify-center text-white text-[11px] font-bold">✓</div>
-          <span className="text-xs font-semibold text-indigo-600">Brand created</span>
+          <div className="w-5.5 h-5.5 rounded-full bg-orange-600 flex items-center justify-center text-white text-[11px] font-bold">✓</div>
+          <span className="text-xs font-semibold text-orange-600">Brand created</span>
         </div>
-        <div className="w-8 h-px bg-indigo-300" />
+        <div className="w-8 h-px bg-orange-300" />
         <div className="flex items-center gap-1.5">
-          <div className="w-5.5 h-5.5 rounded-full bg-indigo-600 flex items-center justify-center text-white text-[11px] font-bold">2</div>
-          <span className="text-xs font-semibold text-indigo-600">Connect accounts</span>
+          <div className="w-5.5 h-5.5 rounded-full bg-orange-600 flex items-center justify-center text-white text-[11px] font-bold">2</div>
+          <span className="text-xs font-semibold text-orange-600">Connect accounts</span>
         </div>
       </div>
 

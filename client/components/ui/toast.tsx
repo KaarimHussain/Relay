@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, createContext, useContext } from 'react';
 import { Check, X, Sparkles } from 'lucide-react';
@@ -39,7 +39,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             )}
           >
             {t.type === 'sparkle' ? (
-              <Sparkles size={14} className="text-violet-400 shrink-0" />
+              <Sparkles size={14} className="text-orange-400 shrink-0" />
             ) : (
               <Check size={14} className="text-emerald-400 stroke-[2.5] shrink-0" />
             )}

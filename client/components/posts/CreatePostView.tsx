@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -32,7 +32,7 @@ const AI_QUICK_ACTIONS = [
 ];
 
 const MOCK_MEDIA_ITEMS = [
-  { id: '1', name: 'product-hero.jpg', bg: 'from-indigo-400 to-violet-600' },
+  { id: '1', name: 'product-hero.jpg', bg: 'from-orange-400 to-orange-600' },
   { id: '2', name: 'team-brainstorm.jpg', bg: 'from-amber-300 to-orange-500' },
   { id: '3', name: 'launch-banner.png', bg: 'from-sky-400 to-blue-600' },
 ];
@@ -155,13 +155,13 @@ export function CreatePostView() {
                     className={cn(
                       'flex items-center gap-2 h-8 px-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer',
                       active
-                        ? 'bg-indigo-50 border-indigo-300 text-indigo-700 shadow-2xs'
+                        ? 'bg-orange-50 border-orange-300 text-orange-700 shadow-2xs'
                         : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-white hover:text-gray-700'
                     )}
                   >
                     <PlatformBadge platform={p.id} size="sm" />
                     <span>{p.label}</span>
-                    {active && <Check size={12} className="text-indigo-600 stroke-[2.5]" />}
+                    {active && <Check size={12} className="text-orange-600 stroke-[2.5]" />}
                   </button>
                 );
               })}
@@ -198,16 +198,16 @@ export function CreatePostView() {
               onChange={(e) => setCaption(e.target.value)}
               placeholder="Write your post content here..."
               rows={6}
-              className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-3 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-colors leading-relaxed resize-none"
+              className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-3 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors leading-relaxed resize-none"
             />
 
             {/* AI Assistant Quick Actions */}
             <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles size={12} className="text-violet-600" /> AI Assistant Actions
+                  <Sparkles size={12} className="text-orange-600" /> AI Assistant Actions
                 </span>
-                {isAiLoading && <RefreshCw size={12} className="animate-spin text-violet-600" />}
+                {isAiLoading && <RefreshCw size={12} className="animate-spin text-orange-600" />}
               </div>
 
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -242,11 +242,11 @@ export function CreatePostView() {
                       className={cn(
                         'h-16 rounded-lg bg-gradient-to-br flex items-center justify-center relative transition-all border overflow-hidden cursor-pointer',
                         item.bg,
-                        isSelected ? 'ring-2 ring-indigo-600 border-indigo-600' : 'border-gray-200 hover:opacity-90'
+                        isSelected ? 'ring-2 ring-orange-600 border-orange-600' : 'border-gray-200 hover:opacity-90'
                       )}
                     >
                       {isSelected && (
-                        <div className="absolute inset-0 bg-indigo-600/30 flex items-center justify-center">
+                        <div className="absolute inset-0 bg-orange-600/30 flex items-center justify-center">
                           <Check size={16} className="text-white stroke-[3]" />
                         </div>
                       )}
@@ -282,7 +282,7 @@ export function CreatePostView() {
                     className={cn(
                       'flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all text-left',
                       mode === opt.id
-                        ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-semibold'
+                        ? 'bg-orange-50 border-orange-300 text-orange-700 font-semibold'
                         : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-white'
                     )}
                   >
@@ -346,7 +346,7 @@ export function CreatePostView() {
               {/* Profile Header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 text-white font-bold text-xs flex items-center justify-center shadow-2xs">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-orange-600 to-orange-500 text-white font-bold text-xs flex items-center justify-center shadow-2xs">
                     AC
                   </div>
                   <div>
@@ -376,10 +376,10 @@ export function CreatePostView() {
                   <>
                     <div className="flex items-center gap-3">
                       <Heart size={16} className="hover:text-rose-500 cursor-pointer" />
-                      <MessageCircle size={16} className="hover:text-indigo-600 cursor-pointer" />
-                      <Send size={15} className="hover:text-indigo-600 cursor-pointer" />
+                      <MessageCircle size={16} className="hover:text-orange-600 cursor-pointer" />
+                      <Send size={15} className="hover:text-orange-600 cursor-pointer" />
                     </div>
-                    <Bookmark size={16} className="hover:text-indigo-600 cursor-pointer" />
+                    <Bookmark size={16} className="hover:text-orange-600 cursor-pointer" />
                   </>
                 )}
 
@@ -394,10 +394,10 @@ export function CreatePostView() {
 
                 {(activePreviewPlatform === 'x' || activePreviewPlatform === 'facebook' || activePreviewPlatform === 'tiktok') && (
                   <div className="flex items-center justify-between w-full text-[11px] font-medium text-gray-500">
-                    <span className="flex items-center gap-1.5 hover:text-indigo-600 cursor-pointer"><MessageCircle size={14} /> 12</span>
+                    <span className="flex items-center gap-1.5 hover:text-orange-600 cursor-pointer"><MessageCircle size={14} /> 12</span>
                     <span className="flex items-center gap-1.5 hover:text-emerald-600 cursor-pointer"><Repeat2 size={14} /> 4</span>
                     <span className="flex items-center gap-1.5 hover:text-rose-500 cursor-pointer"><Heart size={14} /> 48</span>
-                    <span className="flex items-center gap-1.5 hover:text-indigo-600 cursor-pointer"><Share2 size={14} /> Share</span>
+                    <span className="flex items-center gap-1.5 hover:text-orange-600 cursor-pointer"><Share2 size={14} /> Share</span>
                   </div>
                 )}
               </div>

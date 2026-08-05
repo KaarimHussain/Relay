@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useMemo, useRef } from 'react';
 import {
@@ -31,16 +31,16 @@ interface MediaItem {
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
 const MOCK_MEDIA: MediaItem[] = [
-  { id: '1',  name: 'product-hero-shot.jpg',        type: 'image', size: '2.4 MB', sizeBytes: 2516582, dimensions: '1920 × 1080', uploadedAt: 'Today',          usedIn: 3, gradient: 'from-indigo-400 to-violet-600',    accent: 'bg-indigo-200' },
+  { id: '1',  name: 'product-hero-shot.jpg',        type: 'image', size: '2.4 MB', sizeBytes: 2516582, dimensions: '1920 × 1080', uploadedAt: 'Today',          usedIn: 3, gradient: 'from-orange-400 to-orange-600',    accent: 'bg-orange-200' },
   { id: '2',  name: 'team-brainstorm.jpg',           type: 'image', size: '1.8 MB', sizeBytes: 1887436, dimensions: '1080 × 1080', uploadedAt: 'Today',          usedIn: 1, gradient: 'from-amber-300 to-orange-500',     accent: 'bg-amber-200'  },
   { id: '3',  name: 'launch-reel.mp4',               type: 'video', size: '14.2 MB',sizeBytes:14898531, dimensions: '1080 × 1920', uploadedAt: 'Yesterday',      usedIn: 2, gradient: 'from-pink-400 to-rose-600',        accent: 'bg-pink-200'   },
   { id: '4',  name: 'analytics-dashboard.png',       type: 'image', size: '890 KB', sizeBytes: 911360,  dimensions: '1440 × 900',  uploadedAt: 'Yesterday',      usedIn: 4, gradient: 'from-sky-400 to-blue-600',         accent: 'bg-sky-200'    },
   { id: '5',  name: 'behind-scenes-office.jpg',      type: 'image', size: '3.1 MB', sizeBytes: 3250586, dimensions: '1080 × 1350', uploadedAt: 'Mon, Aug 4',     usedIn: 0, gradient: 'from-emerald-400 to-teal-600',     accent: 'bg-emerald-200'},
   { id: '6',  name: 'brand-logo-white.png',          type: 'image', size: '124 KB', sizeBytes: 126976,  dimensions: '800 × 200',   uploadedAt: 'Mon, Aug 4',     usedIn: 7, gradient: 'from-gray-700 to-gray-900',        accent: 'bg-gray-400'   },
   { id: '7',  name: 'confetti-celebration.gif',      type: 'gif',   size: '4.6 MB', sizeBytes: 4825702, dimensions: '480 × 480',   uploadedAt: 'Sun, Aug 3',     usedIn: 1, gradient: 'from-yellow-300 to-pink-500',      accent: 'bg-yellow-200' },
-  { id: '8',  name: 'feature-demo.mp4',              type: 'video', size: '22.7 MB',sizeBytes:23801241, dimensions: '1920 × 1080', uploadedAt: 'Sun, Aug 3',     usedIn: 0, gradient: 'from-violet-400 to-purple-700',    accent: 'bg-violet-200' },
+  { id: '8',  name: 'feature-demo.mp4',              type: 'video', size: '22.7 MB',sizeBytes:23801241, dimensions: '1920 × 1080', uploadedAt: 'Sun, Aug 3',     usedIn: 0, gradient: 'from-orange-400 to-orange-700',    accent: 'bg-orange-200' },
   { id: '9',  name: 'testimonial-quote-sara.png',    type: 'image', size: '540 KB', sizeBytes: 552960,  dimensions: '1080 × 1080', uploadedAt: 'Sat, Aug 2',     usedIn: 2, gradient: 'from-rose-300 to-red-500',         accent: 'bg-rose-200'   },
-  { id: '10', name: 'linkedin-banner.jpg',            type: 'image', size: '1.1 MB', sizeBytes: 1153433, dimensions: '1584 × 396',  uploadedAt: 'Sat, Aug 2',     usedIn: 1, gradient: 'from-blue-500 to-indigo-700',      accent: 'bg-blue-200'   },
+  { id: '10', name: 'linkedin-banner.jpg',            type: 'image', size: '1.1 MB', sizeBytes: 1153433, dimensions: '1584 × 396',  uploadedAt: 'Sat, Aug 2',     usedIn: 1, gradient: 'from-blue-500 to-orange-700',      accent: 'bg-blue-200'   },
   { id: '11', name: 'product-walkthrough.mp4',        type: 'video', size: '31.4 MB',sizeBytes:32934707, dimensions: '1920 × 1080', uploadedAt: 'Fri, Aug 1',     usedIn: 5, gradient: 'from-teal-400 to-cyan-600',        accent: 'bg-teal-200'   },
   { id: '12', name: 'holiday-promo-banner.png',       type: 'image', size: '760 KB', sizeBytes: 778240,  dimensions: '1200 × 628',  uploadedAt: 'Thu, Jul 31',    usedIn: 0, gradient: 'from-red-400 to-pink-600',         accent: 'bg-red-200'    },
   { id: '13', name: 'loading-spinner.gif',            type: 'gif',   size: '88 KB',  sizeBytes: 90112,   dimensions: '200 × 200',   uploadedAt: 'Wed, Jul 30',    usedIn: 0, gradient: 'from-slate-300 to-slate-500',      accent: 'bg-slate-200'  },
@@ -139,7 +139,7 @@ function PreviewModal({ item, onClose }: { item: MediaItem; onClose: () => void 
             </button>
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition-colors ml-auto"
+              className="flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors ml-auto"
             >
               <Send size={13} /> Use in post
             </button>
@@ -169,7 +169,7 @@ function GridCard({
     <div
       className={cn(
         'group relative flex flex-col bg-white border rounded-xl overflow-hidden transition-all cursor-pointer',
-        selected ? 'border-indigo-400 ring-2 ring-indigo-500/20' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+        selected ? 'border-orange-400 ring-2 ring-orange-500/20' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
       )}
     >
       {/* Thumbnail */}
@@ -185,7 +185,7 @@ function GridCard({
           className={cn(
             'absolute top-2 right-2 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all',
             selected
-              ? 'bg-indigo-500 border-indigo-500'
+              ? 'bg-orange-500 border-orange-500'
               : 'bg-white/80 border-white opacity-0 group-hover:opacity-100'
           )}
         >
@@ -256,13 +256,13 @@ function ListRow({
   return (
     <div className={cn(
       'flex items-center gap-3 px-4 py-2.5 group transition-colors border-b border-gray-100 last:border-0',
-      selected ? 'bg-indigo-50/50' : 'hover:bg-gray-50/70'
+      selected ? 'bg-orange-50/50' : 'hover:bg-gray-50/70'
     )}>
       <input
         type="checkbox"
         checked={selected}
         onChange={onToggle}
-        className="w-4 h-4 rounded border-gray-300 accent-indigo-500 cursor-pointer shrink-0"
+        className="w-4 h-4 rounded border-gray-300 accent-orange-500 cursor-pointer shrink-0"
       />
       {/* Tiny thumb */}
       <div
@@ -306,10 +306,10 @@ function UploadZone({ onUpload }: { onUpload: (items: Omit<MediaItem, 'id' | 'us
       const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
       const type: MediaType = f.type.startsWith('video') ? 'video' : ext === 'gif' ? 'gif' : 'image';
       const gradients = [
-        'from-indigo-400 to-violet-600', 'from-pink-400 to-rose-600',
+        'from-orange-400 to-orange-600', 'from-pink-400 to-rose-600',
         'from-amber-300 to-orange-500', 'from-emerald-400 to-teal-600',
       ];
-      const accents = ['bg-indigo-200', 'bg-pink-200', 'bg-amber-200', 'bg-emerald-200'];
+      const accents = ['bg-orange-200', 'bg-pink-200', 'bg-amber-200', 'bg-emerald-200'];
       const idx = Math.floor(Math.random() * 4);
       return {
         name: f.name,
@@ -333,14 +333,14 @@ function UploadZone({ onUpload }: { onUpload: (items: Omit<MediaItem, 'id' | 'us
       onClick={() => fileRef.current?.click()}
       className={cn(
         'flex flex-col items-center justify-center gap-2 h-28 border-2 border-dashed rounded-xl cursor-pointer transition-colors',
-        dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+        dragOver ? 'border-orange-400 bg-orange-50' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
       )}
     >
-      <Upload size={20} className={dragOver ? 'text-indigo-400' : 'text-gray-300'} />
+      <Upload size={20} className={dragOver ? 'text-orange-400' : 'text-gray-300'} />
       <div className="text-center">
         <p className="text-[13px] text-gray-500">
           Drop files here, or{' '}
-          <span className="text-indigo-500 font-medium">browse</span>
+          <span className="text-orange-500 font-medium">browse</span>
         </p>
         <p className="text-[11px] text-gray-400 mt-0.5">PNG, JPG, GIF, MP4 up to 50 MB</p>
       </div>
@@ -430,10 +430,10 @@ export function MediaLibraryView() {
           <span className="text-gray-300">·</span>
           <span><span className="font-semibold text-gray-700">{totalSize}</span> used</span>
           <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full w-[34%] bg-indigo-400 rounded-full" />
+            <div className="h-full w-[34%] bg-orange-400 rounded-full" />
           </div>
           <span className="text-gray-400">34% of 300 MB</span>
-          <button className="text-indigo-500 font-medium hover:text-indigo-600 transition-colors">Upgrade for more</button>
+          <button className="text-orange-500 font-medium hover:text-orange-600 transition-colors">Upgrade for more</button>
         </div>
 
         {/* Toolbar */}
@@ -500,9 +500,9 @@ export function MediaLibraryView() {
 
         {/* Bulk action bar */}
         {selected.size > 0 && (
-          <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-orange-50 border border-orange-100 rounded-xl">
             <div className="flex items-center gap-3">
-              <span className="text-[13px] font-medium text-indigo-600">
+              <span className="text-[13px] font-medium text-orange-600">
                 {selected.size} file{selected.size > 1 ? 's' : ''} selected
               </span>
               <button onClick={() => setSelected(new Set())} className="text-[12px] text-gray-400 hover:text-gray-600 transition-colors">
@@ -512,7 +512,7 @@ export function MediaLibraryView() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setComposerOpen(true)}
-                className="flex items-center gap-1.5 h-7 px-3 text-[12px] font-medium text-indigo-600 bg-white border border-indigo-200 rounded-md hover:bg-indigo-50 transition-colors"
+                className="flex items-center gap-1.5 h-7 px-3 text-[12px] font-medium text-orange-600 bg-white border border-orange-200 rounded-md hover:bg-orange-50 transition-colors"
               >
                 <Send size={11} /> Use in post
               </button>
@@ -558,7 +558,7 @@ export function MediaLibraryView() {
                 checked={selected.size === filtered.length && filtered.length > 0}
                 ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < filtered.length; }}
                 onChange={toggleAll}
-                className="w-4 h-4 rounded border-gray-300 accent-indigo-500 cursor-pointer"
+                className="w-4 h-4 rounded border-gray-300 accent-orange-500 cursor-pointer"
               />
               <div className="w-10 shrink-0" />
               <span className="flex-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">File name</span>

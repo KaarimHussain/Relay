@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useMemo } from 'react';
 import {
@@ -122,10 +122,10 @@ const CATEGORIES: Category[] = [
 ];
 
 const CATEGORY_COLORS: Record<Category, string> = {
-  Promotional:         'bg-indigo-50 text-indigo-700 border-indigo-100',
+  Promotional:         'bg-orange-50 text-orange-700 border-orange-100',
   Educational:         'bg-blue-50 text-blue-700 border-blue-100',
   Engagement:          'bg-rose-50 text-rose-700 border-rose-100',
-  'Behind-the-scenes': 'bg-purple-50 text-purple-700 border-purple-100',
+  'Behind-the-scenes': 'bg-orange-50 text-orange-700 border-orange-100',
   Announcement:        'bg-amber-50 text-amber-700 border-amber-100',
   Inspirational:       'bg-emerald-50 text-emerald-700 border-emerald-100',
   'Weekly roundup':    'bg-sky-50 text-sky-700 border-sky-100',
@@ -189,7 +189,7 @@ function TemplateFormModal({
               onChange={e => setName(e.target.value)}
               placeholder="e.g. Weekly tips thread"
               autoFocus
-              className="w-full h-[38px] px-3 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-colors"
+              className="w-full h-[38px] px-3 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors"
             />
           </div>
 
@@ -255,7 +255,7 @@ function TemplateFormModal({
               onChange={e => setCaption(e.target.value)}
               placeholder="Write your template caption. Use [brackets] for parts that change each time, e.g. [Brand Name], [Topic], [CTA]."
               rows={8}
-              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-colors resize-none leading-relaxed font-mono"
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors resize-none leading-relaxed font-mono"
             />
           </div>
         </div>
@@ -268,7 +268,7 @@ function TemplateFormModal({
           <button
             disabled={!canSave}
             onClick={() => { onSave({ name: name.trim(), category, platforms: [...platforms], caption }); onClose(); }}
-            className="h-9 px-4 text-[13px] font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+            className="h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
           >
             <Check size={13} /> Save template
           </button>
@@ -337,7 +337,7 @@ function TemplateCard({
         {uniquePlaceholders.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {uniquePlaceholders.slice(0, 4).map(p => (
-              <span key={p} className="text-[10px] font-mono font-medium text-indigo-500 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">
+              <span key={p} className="text-[10px] font-mono font-medium text-orange-500 bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded">
                 {p}
               </span>
             ))}
@@ -365,7 +365,7 @@ function TemplateCard({
 
         <button
           onClick={onUse}
-          className="flex items-center gap-1.5 h-7 px-3 text-[12px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-colors"
+          className="flex items-center gap-1.5 h-7 px-3 text-[12px] font-semibold text-orange-600 bg-orange-50 border border-orange-100 rounded-lg hover:bg-orange-100 transition-colors"
         >
           <Send size={11} /> Use template
         </button>
@@ -412,7 +412,7 @@ function EmptyState({ filtered, onNew }: { filtered: boolean; onNew: () => void 
       {!filtered && (
         <button
           onClick={onNew}
-          className="flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition-colors"
+          className="flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
         >
           <Plus size={14} strokeWidth={2.5} /> Create your first template
         </button>

@@ -1,8 +1,10 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -34,6 +36,30 @@ export class AuthService {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const { passwordHash: _, ...safeUser } = user;
     return safeUser;
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    if (dto.email) {
+      const existing = await this.prisma.user.findFirst({
+        where: { email: dto.email, NOT: { id: userId } },
+      });
+      if (existing) throw new ConflictException('Email already in use');
+    }
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { ...(dto.name && { name: dto.name }), ...(dto.email && { email: dto.email }), ...(dto.avatarUrl !== undefined && { avatarUrl: dto.avatarUrl }) },
+      select: { id: true, email: true, name: true, avatarUrl: true, createdAt: true },
+    });
+    return user;
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const ok = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!ok) throw new BadRequestException('Current password is incorrect');
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    return { message: 'Password updated' };
   }
 
   private sign(userId: string) {

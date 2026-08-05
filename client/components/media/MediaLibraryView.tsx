@@ -261,28 +261,25 @@ function UploadZone({ brandId, onUploaded }: { brandId: string; onUploaded: (ite
     setUploading(true);
     setUploadError('');
     try {
-      // 1. Get presigned POST url from backend
-      const { uploadUrl, fields, mediaId } = await api.post<{
-        uploadUrl: string; fields: Record<string, string>; mediaId: string; key: string;
-      }>(`/brands/${brandId}/media/upload-url`, {
-        filename: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        sizeBytes: file.size,
+      const token = typeof window !== 'undefined' ? localStorage.getItem('relay_token') : null;
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+      const res = await fetch(`${BASE_URL}/brands/${brandId}/media/upload`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
       });
 
-      // 2. Upload directly to S3/R2 using presigned POST
-      const formData = new FormData();
-      for (const [k, v] of Object.entries(fields)) formData.append(k, v);
-      formData.append('file', file);
-      const s3Resp = await fetch(uploadUrl, { method: 'POST', body: formData });
-      if (!s3Resp.ok && s3Resp.status !== 204 && s3Resp.status !== 201) {
-        throw new Error(`Upload failed: ${s3Resp.status}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = Array.isArray(body.message) ? body.message[0] : (body.message ?? `Upload failed: ${res.status}`);
+        throw new Error(msg);
       }
 
-      // 3. Fetch the created media record to get the public URL
-      const allMedia = await api.get<BackendMedia[]>(`/brands/${brandId}/media`);
-      const created = allMedia.find((m) => m.id === mediaId);
-      if (created) onUploaded(mapMedia(created));
+      const created: BackendMedia = await res.json();
+      onUploaded(mapMedia(created));
       toast(`${file.name} uploaded!`, 'success');
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : (err instanceof Error ? err.message : 'Upload failed');

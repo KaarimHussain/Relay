@@ -1,17 +1,17 @@
 ﻿'use client';
 
 import { useState, useEffect, createContext, useContext } from 'react';
-import { Check, X, Sparkles } from 'lucide-react';
+import { AlertCircle, Check, X, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Toast {
   id: string;
   message: string;
-  type?: 'success' | 'info' | 'sparkle';
+  type?: 'success' | 'info' | 'sparkle' | 'error';
 }
 
 interface ToastContextType {
-  toast: (message: string, type?: 'success' | 'info' | 'sparkle') => void;
+  toast: (message: string, type?: 'success' | 'info' | 'sparkle' | 'error') => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -19,7 +19,7 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined);
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const toast = (message: string, type: 'success' | 'info' | 'sparkle' = 'success') => {
+  const toast = (message: string, type: 'success' | 'info' | 'sparkle' | 'error' = 'success') => {
     const id = Date.now().toString();
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
@@ -40,6 +40,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           >
             {t.type === 'sparkle' ? (
               <Sparkles size={14} className="text-orange-400 shrink-0" />
+            ) : t.type === 'error' ? (
+              <AlertCircle size={14} className="text-red-400 shrink-0" />
             ) : (
               <Check size={14} className="text-emerald-400 stroke-[2.5] shrink-0" />
             )}

@@ -4,6 +4,7 @@ import { Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccountsService } from '../../accounts/accounts.service';
 import { PostStatus } from '@prisma/client';
+import { publishToPlatform } from './platform-publisher';
 
 export const PUBLISH_QUEUE = 'publish';
 
@@ -42,9 +43,13 @@ export class PublishProcessor extends WorkerHost {
 
     try {
       const account = await this.accounts.getDecryptedAccount(accountId);
-      // TODO: Call platform-specific API with account.accessToken and target caption/hashtags.
-      // Each platform SDK call goes here. For now we simulate success.
-      const externalPostId = `mock_${Date.now()}`;
+      const externalPostId = await publishToPlatform(
+        account.platform,
+        account.platformUserId,
+        account.accessToken,
+        target.caption,
+        target.hashtags,
+      );
 
       await this.prisma.postPlatformTarget.update({
         where: { id: targetId },

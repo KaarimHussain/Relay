@@ -1,19 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Sparkles, Send, Clock, FileText,
-  Upload, Check, Heart, MessageCircle, Share2, Repeat2, Bookmark,
-  RefreshCw, AlertCircle, Loader2,
+  Check, Heart, MessageCircle, Share2, Repeat2, Bookmark,
+  RefreshCw, AlertCircle, Loader2, Save,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PlatformBadge } from '@/components/ui/platform-icons';
 import { useToast } from '@/components/ui/toast';
 import { useBrandStore } from '@/store/brand';
 import { useAccountStore } from '@/store/account';
-import { usePostStore } from '@/store/post';
+import { usePostStore, Post } from '@/store/post';
 import { ApiError } from '@/lib/api';
 
 const PLATFORM_META: Record<string, { label: string; limit: number }> = {
@@ -24,13 +24,11 @@ const PLATFORM_META: Record<string, { label: string; limit: number }> = {
   TikTok:    { label: 'TikTok',    limit: 2200  },
 };
 
-// Maps backend Platform enum to PlatformBadge id
 const PLATFORM_BADGE_ID: Record<string, string> = {
   Instagram: 'instagram', LinkedIn: 'linkedin', X: 'x', Facebook: 'facebook', TikTok: 'tiktok',
 };
 
 type PostMode = 'now' | 'schedule' | 'draft';
-type PreviewPlatform = string;
 
 const AI_QUICK_ACTIONS = [
   { label: '✨ Auto-Fix Tone',     prompt: 'improve-tone'   },
@@ -39,26 +37,55 @@ const AI_QUICK_ACTIONS = [
   { label: '📏 Shorten for X',     prompt: 'shorten-for-x'  },
 ];
 
-export function CreatePostView() {
+function modeFromPost(post: Post): PostMode {
+  if (post.status === 'Scheduled' && post.scheduledAt) return 'schedule';
+  return 'draft';
+}
+
+export function EditPostView({ postId }: { postId: string }) {
   const router = useRouter();
   const { toast } = useToast();
   const activeBrand = useBrandStore((s) => s.activeBrand());
   const allAccounts = useAccountStore((s) => s.accounts);
   const accounts = allAccounts.filter((a) => a.status === 'Active');
-  const { createPost, schedulePost, publishNow } = usePostStore();
+  const { posts, fetchPosts, updatePost, schedulePost, publishNow, cancelPost } = usePostStore();
 
-  const [title, setTitle] = useState('');
-  const [caption, setCaption] = useState('');
-  const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
-  const [activePreview, setActivePreview] = useState<PreviewPlatform>('');
-  const [mode, setMode] = useState<PostMode>('schedule');
-  const [scheduleDate, setScheduleDate] = useState(() => {
-    const d = new Date(Date.now() + 3600000);
-    return d.toISOString().slice(0, 16);
-  });
+  const post = posts.find((p) => p.id === postId) ?? null;
+
+  // Fetch posts if not yet loaded
+  useEffect(() => {
+    if (activeBrand && posts.length === 0) {
+      fetchPosts(activeBrand.id);
+    }
+  }, [activeBrand?.id]);
+
+  // Derived initial values from existing post
+  const initialCaption = post?.targets[0]?.caption ?? '';
+  const initialAccountIds = new Set(post?.targets.map((t) => t.accountId) ?? []);
+  const initialMode = post ? modeFromPost(post) : 'draft';
+  const initialScheduleDate = post?.scheduledAt
+    ? new Date(post.scheduledAt).toISOString().slice(0, 16)
+    : (() => { const d = new Date(Date.now() + 3600000); return d.toISOString().slice(0, 16); })();
+
+  const [title, setTitle] = useState(post?.title ?? '');
+  const [caption, setCaption] = useState(initialCaption);
+  const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(initialAccountIds);
+  const [activePreview, setActivePreview] = useState('');
+  const [mode, setMode] = useState<PostMode>(initialMode);
+  const [scheduleDate, setScheduleDate] = useState(initialScheduleDate);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  // Sync state when post loads from store
+  useEffect(() => {
+    if (!post) return;
+    setTitle(post.title);
+    setCaption(post.targets[0]?.caption ?? '');
+    setSelectedAccountIds(new Set(post.targets.map((t) => t.accountId)));
+    setMode(modeFromPost(post));
+    if (post.scheduledAt) setScheduleDate(new Date(post.scheduledAt).toISOString().slice(0, 16));
+  }, [post?.id]);
 
   const toggleAccount = (id: string, platform: string) => {
     setSelectedAccountIds((prev) => {
@@ -84,8 +111,8 @@ export function CreatePostView() {
     }, 800);
   };
 
-  const handleSubmit = async () => {
-    if (!activeBrand) return;
+  const handleSave = async () => {
+    if (!activeBrand || !post) return;
     if (!title.trim()) { setSubmitError('Please enter a title for this post.'); return; }
     if (!caption.trim()) { setSubmitError('Please write a caption.'); return; }
     if (selectedAccountIds.size === 0) { setSubmitError('Select at least one platform account.'); return; }
@@ -95,47 +122,62 @@ export function CreatePostView() {
     setIsSubmitting(true);
     try {
       const targets = [...selectedAccountIds].map((accountId) => ({ accountId, caption }));
-      const post = await createPost(activeBrand.id, { title: title.trim(), targets });
+
+      // If currently scheduled, cancel first so we can re-apply timing
+      if (post.status === 'Scheduled' && mode !== 'schedule') {
+        await cancelPost(activeBrand.id, post.id);
+      }
+
+      await updatePost(activeBrand.id, post.id, { title: title.trim(), targets });
 
       if (mode === 'now') {
         await publishNow(activeBrand.id, post.id);
         toast('Post queued for publishing!', 'success');
       } else if (mode === 'schedule') {
         await schedulePost(activeBrand.id, post.id, new Date(scheduleDate).toISOString());
-        toast('Post scheduled successfully!', 'success');
+        toast('Post rescheduled!', 'success');
       } else {
-        toast('Saved as draft', 'info');
+        toast('Changes saved as draft', 'info');
       }
       router.push('/queue');
     } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.message : 'Failed to save post. Please try again.');
+      setSubmitError(err instanceof ApiError ? err.message : 'Failed to save changes. Please try again.');
       setIsSubmitting(false);
     }
   };
 
-  const handleSaveDraft = async () => {
-    if (!activeBrand || !title.trim()) { setSubmitError('Please enter a title before saving.'); return; }
-    setIsSubmitting(true);
-    try {
-      const targets = [...selectedAccountIds].map((id) => ({ accountId: id, caption }));
-      await createPost(activeBrand.id, { title: title.trim(), targets });
-      toast('Draft saved', 'info');
-      router.push('/queue');
-    } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.message : 'Failed to save draft.');
-      setIsSubmitting(false);
-    }
-  };
+  // Loading state while post is being fetched
+  if (!post && posts.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 size={24} className="animate-spin text-gray-300" />
+      </div>
+    );
+  }
+
+  // Post not found
+  if (!post) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <AlertCircle size={24} className="text-gray-300" />
+        <p className="text-sm font-medium text-gray-500">Post not found</p>
+        <Link href="/queue" className="text-xs text-orange-500 hover:text-orange-600 font-medium">
+          ← Back to queue
+        </Link>
+      </div>
+    );
+  }
 
   if (!activeBrand) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
         <AlertCircle size={24} className="text-gray-300" />
         <p className="text-sm font-medium text-gray-500">No brand selected</p>
-        <p className="text-xs text-gray-400">Select a brand from the sidebar first.</p>
       </div>
     );
   }
+
+  const isReadOnly = post.status === 'Publishing' || post.status === 'Published';
 
   return (
     <div className="flex flex-col gap-4">
@@ -146,22 +188,40 @@ export function CreatePostView() {
             <ArrowLeft size={14} /> Back
           </Link>
           <div>
-            <h1 className="text-lg font-bold text-gray-900 tracking-tight">Create & Schedule Post</h1>
-            <p className="text-xs text-gray-500">for <span className="font-semibold">{activeBrand.name}</span></p>
+            <h1 className="text-lg font-bold text-gray-900 tracking-tight">Edit Post</h1>
+            <p className="text-xs text-gray-500">
+              for <span className="font-semibold">{activeBrand.name}</span>
+              {' · '}
+              <span className={cn(
+                'font-semibold',
+                post.status === 'Draft' ? 'text-gray-400' :
+                post.status === 'Scheduled' ? 'text-amber-500' :
+                post.status === 'Published' ? 'text-emerald-500' :
+                post.status === 'Publishing' ? 'text-blue-500' : 'text-red-500'
+              )}>{post.status}</span>
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={handleSaveDraft} disabled={isSubmitting}
-            className="btn-clay-secondary h-8 px-3.5 text-xs font-semibold disabled:opacity-50">
-            Save Draft
-          </button>
-          <button type="button" onClick={handleSubmit} disabled={isSubmitting}
-            className="btn-clay-primary h-8 px-4 text-xs font-semibold gap-1.5 inline-flex items-center disabled:opacity-50">
-            {isSubmitting ? <Loader2 size={13} className="animate-spin" /> : mode === 'now' ? <Send size={13} /> : <Clock size={13} />}
-            {isSubmitting ? 'Saving…' : mode === 'now' ? 'Publish Now' : mode === 'schedule' ? 'Schedule Post' : 'Save Draft'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSubmitting || isReadOnly}
+          className="btn-clay-primary h-8 px-4 text-xs font-semibold gap-1.5 inline-flex items-center disabled:opacity-50"
+        >
+          {isSubmitting ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+          {isSubmitting ? 'Saving…' : 'Save changes'}
+        </button>
       </div>
+
+      {/* Read-only warning */}
+      {isReadOnly && (
+        <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <AlertCircle size={14} className="text-amber-500 shrink-0" />
+          <p className="text-xs font-medium text-amber-700">
+            This post is {post.status.toLowerCase()} and cannot be edited.
+          </p>
+        </div>
+      )}
 
       {/* Error */}
       {submitError && (
@@ -184,9 +244,9 @@ export function CreatePostView() {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Product launch announcement"
               maxLength={200}
-              className="w-full h-[38px] px-3 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors"
+              disabled={isReadOnly}
+              className="w-full h-[38px] px-3 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             />
-            <p className="text-[11px] text-gray-400 mt-1.5">Used internally to identify this post in your queue.</p>
           </div>
 
           {/* Platform selector */}
@@ -206,8 +266,9 @@ export function CreatePostView() {
                   const meta = PLATFORM_META[acc.platform];
                   const active = selectedAccountIds.has(acc.id);
                   return (
-                    <button key={acc.id} type="button" onClick={() => toggleAccount(acc.id, acc.platform)}
-                      className={cn('flex items-center gap-2 h-8 px-3 rounded-lg border text-xs font-semibold transition-all',
+                    <button key={acc.id} type="button" onClick={() => !isReadOnly && toggleAccount(acc.id, acc.platform)}
+                      disabled={isReadOnly}
+                      className={cn('flex items-center gap-2 h-8 px-3 rounded-lg border text-xs font-semibold transition-all disabled:cursor-not-allowed',
                         active ? 'bg-orange-50 border-orange-300 text-orange-700 shadow-2xs' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-white hover:text-gray-700')}>
                       <PlatformBadge platform={PLATFORM_BADGE_ID[acc.platform] ?? acc.platform.toLowerCase()} size="sm" />
                       <span>{meta?.label ?? acc.platform}</span>
@@ -239,53 +300,61 @@ export function CreatePostView() {
               </div>
             </div>
 
-            <textarea value={caption} onChange={(e) => setCaption(e.target.value)}
+            <textarea
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
               placeholder="Write your post content here…"
               rows={6}
-              className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-3 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors leading-relaxed resize-none" />
+              disabled={isReadOnly}
+              className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-3 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors leading-relaxed resize-none disabled:opacity-60 disabled:cursor-not-allowed"
+            />
 
-            <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles size={12} className="text-orange-600" /> AI Quick Actions
-                </span>
-                {isAiLoading && <RefreshCw size={12} className="animate-spin text-orange-600" />}
+            {!isReadOnly && (
+              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles size={12} className="text-orange-600" /> AI Quick Actions
+                  </span>
+                  {isAiLoading && <RefreshCw size={12} className="animate-spin text-orange-600" />}
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {AI_QUICK_ACTIONS.map((act) => (
+                    <button key={act.label} type="button" disabled={isAiLoading}
+                      onClick={() => handleAiAction(act.prompt)}
+                      className="btn-clay-secondary h-6.5 px-2.5 text-[11px] font-medium disabled:opacity-50">
+                      {act.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {AI_QUICK_ACTIONS.map((act) => (
-                  <button key={act.label} type="button" disabled={isAiLoading}
-                    onClick={() => handleAiAction(act.prompt)}
-                    className="btn-clay-secondary h-6.5 px-2.5 text-[11px] font-medium disabled:opacity-50">
-                    {act.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Schedule options */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-2.5 shadow-2xs">
-            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Post Timing</label>
-            <div className="flex flex-col gap-2">
-              {([
-                { id: 'now',      label: 'Post immediately',  icon: Send     },
-                { id: 'schedule', label: 'Schedule for later', icon: Clock    },
-                { id: 'draft',    label: 'Save as draft',      icon: FileText },
-              ] as const).map((opt) => (
-                <button key={opt.id} type="button" onClick={() => setMode(opt.id)}
-                  className={cn('flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all text-left',
-                    mode === opt.id ? 'bg-orange-50 border-orange-300 text-orange-700 font-semibold' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-white')}>
-                  <opt.icon size={13} />
-                  <span>{opt.label}</span>
-                </button>
-              ))}
+          {!isReadOnly && (
+            <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-2.5 shadow-2xs">
+              <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Post Timing</label>
+              <div className="flex flex-col gap-2">
+                {([
+                  { id: 'now',      label: 'Post immediately',  icon: Send     },
+                  { id: 'schedule', label: 'Schedule for later', icon: Clock    },
+                  { id: 'draft',    label: 'Save as draft',      icon: FileText },
+                ] as const).map((opt) => (
+                  <button key={opt.id} type="button" onClick={() => setMode(opt.id)}
+                    className={cn('flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all text-left',
+                      mode === opt.id ? 'bg-orange-50 border-orange-300 text-orange-700 font-semibold' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-white')}>
+                    <opt.icon size={13} />
+                    <span>{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+              {mode === 'schedule' && (
+                <input type="datetime-local" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)}
+                  min={new Date().toISOString().slice(0, 16)}
+                  className="w-full h-8 bg-gray-50 border border-gray-200 rounded-lg px-2.5 text-xs text-gray-800 font-medium outline-none focus:border-orange-500" />
+              )}
             </div>
-            {mode === 'schedule' && (
-              <input type="datetime-local" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)}
-                min={new Date().toISOString().slice(0, 16)}
-                className="w-full h-8 bg-gray-50 border border-gray-200 rounded-lg px-2.5 text-xs text-gray-800 font-medium outline-none focus:border-orange-500" />
-            )}
-          </div>
+          )}
         </div>
 
         {/* Right: Preview */}
@@ -320,10 +389,8 @@ export function CreatePostView() {
                     {activeBrand.name[0].toUpperCase()}
                   </div>
                   <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-gray-900">{activeBrand.name}</span>
-                    </div>
-                    <span className="text-[10px] text-gray-400">Just now · Public</span>
+                    <span className="text-xs font-bold text-gray-900">{activeBrand.name}</span>
+                    <p className="text-[10px] text-gray-400">Just now · Public</p>
                   </div>
                 </div>
                 <PlatformBadge platform={PLATFORM_BADGE_ID[previewPlatform] ?? previewPlatform.toLowerCase()} size="md" />

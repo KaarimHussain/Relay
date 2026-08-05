@@ -1,13 +1,17 @@
 ﻿'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   User, Building2, Bell, CreditCard, Users,
   Camera, Check, AlertTriangle, ChevronRight,
   Zap, Shield, Mail, Crown, Pencil, Eye, Trash2,
-  UserPlus, Clock, MoreHorizontal, ChevronDown,
+  UserPlus, Clock, MoreHorizontal, ChevronDown, Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth';
+import { useBrandStore } from '@/store/brand';
+import { useAccountStore } from '@/store/account';
+import { useToast } from '@/components/ui/toast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -130,22 +134,69 @@ function NotifRow({
 // ─── Profile tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab() {
-  const [name, setName] = useState('Alex Johnson');
-  const [email, setEmail] = useState('alex@relay.app');
-  const [bio, setBio] = useState('');
-  const [saved, setSaved] = useState({ name, email, bio });
+  const { toast } = useToast();
+  const user = useAuthStore((s) => s.user);
+  const updateProfile = useAuthStore((s) => s.updateProfile);
+  const changePassword = useAuthStore((s) => s.changePassword);
+
+  const [name, setName] = useState(user?.name ?? '');
+  const [email, setEmail] = useState(user?.email ?? '');
+  const [savedName, setSavedName] = useState(user?.name ?? '');
+  const [savedEmail, setSavedEmail] = useState(user?.email ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const [curPw, setCurPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+
   const fileRef = useRef<HTMLInputElement>(null);
-  const [avatar, setAvatar] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatarUrl ?? null);
 
-  const dirty = name !== saved.name || email !== saved.email || bio !== saved.bio;
+  const dirty = name !== savedName || email !== savedEmail;
 
-  const save = () => { setSaved({ name, email, bio }); };
-  const discard = () => { setName(saved.name); setEmail(saved.email); setBio(saved.bio); };
+  const save = async () => {
+    if (!dirty) return;
+    setSaving(true);
+    try {
+      await updateProfile({ name: name.trim() || undefined, email: email.trim() || undefined });
+      setSavedName(name);
+      setSavedEmail(email);
+      toast('Profile updated', 'success');
+    } catch (err: any) {
+      toast(err?.message ?? 'Failed to update profile', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const discard = () => { setName(savedName); setEmail(savedEmail); };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) setAvatar(URL.createObjectURL(file));
+    if (!file) return;
+    setAvatarPreview(URL.createObjectURL(file));
+    // Avatar upload via presigned URL would go here in production
+    toast('Avatar preview updated (upload not yet wired)', 'info');
   };
+
+  const handlePasswordChange = async () => {
+    if (!curPw || !newPw) return;
+    if (newPw !== confirmPw) { toast('Passwords do not match', 'error'); return; }
+    if (newPw.length < 8) { toast('New password must be at least 8 characters', 'error'); return; }
+    setPwSaving(true);
+    try {
+      await changePassword(curPw, newPw);
+      setCurPw(''); setNewPw(''); setConfirmPw('');
+      toast('Password updated', 'success');
+    } catch (err: any) {
+      toast(err?.message ?? 'Failed to update password', 'error');
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
+  const initials = (name || user?.name || '?').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
 
   return (
     <div className="flex flex-col gap-6">
@@ -153,9 +204,9 @@ function ProfileTab() {
       <div className="flex items-center gap-5 pb-6 border-b border-gray-100">
         <div className="relative">
           <div className="w-16 h-16 rounded-full bg-orange-500 flex items-center justify-center text-white text-[22px] font-bold overflow-hidden">
-            {avatar
-              ? <img src={avatar} alt="" className="w-full h-full object-cover" />
-              : name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+            {avatarPreview
+              ? <img src={avatarPreview} alt="" className="w-full h-full object-cover" />
+              : initials
             }
           </div>
           <button
@@ -167,8 +218,8 @@ function ProfileTab() {
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
         </div>
         <div>
-          <p className="text-[14px] font-semibold text-gray-900">{saved.name}</p>
-          <p className="text-[13px] text-gray-400">{saved.email}</p>
+          <p className="text-[14px] font-semibold text-gray-900">{savedName}</p>
+          <p className="text-[13px] text-gray-400">{savedEmail}</p>
           <button onClick={() => fileRef.current?.click()} className="text-[12px] text-orange-500 hover:text-orange-600 mt-1 transition-colors">
             Change photo
           </button>
@@ -185,33 +236,33 @@ function ProfileTab() {
         </Field>
       </div>
 
-      <Field label="Bio" hint="Shown on your public profile. Max 160 characters.">
-        <textarea
-          value={bio}
-          onChange={e => setBio(e.target.value.slice(0, 160))}
-          placeholder="Tell us a bit about yourself…"
-          rows={3}
-          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors resize-none"
-        />
-        <p className="text-[11px] text-gray-400 text-right -mt-1">{bio.length}/160</p>
-      </Field>
-
       <SaveBar dirty={dirty} onSave={save} onDiscard={discard} />
+
+      {saving && (
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <Loader2 size={13} className="animate-spin" /> Saving…
+        </div>
+      )}
 
       {/* Password section */}
       <div className="pt-4 border-t border-gray-100">
         <p className="text-[15px] font-semibold text-gray-900 mb-4">Change password</p>
         <div className="flex flex-col gap-4 max-w-sm">
           <Field label="Current password">
-            <TextInput type="password" placeholder="••••••••" />
+            <TextInput type="password" value={curPw} onChange={setCurPw} placeholder="••••••••" />
           </Field>
           <Field label="New password" hint="Must be at least 8 characters.">
-            <TextInput type="password" placeholder="••••••••" />
+            <TextInput type="password" value={newPw} onChange={setNewPw} placeholder="••••••••" />
           </Field>
           <Field label="Confirm new password">
-            <TextInput type="password" placeholder="••••••••" />
+            <TextInput type="password" value={confirmPw} onChange={setConfirmPw} placeholder="••••••••" />
           </Field>
-          <button className="self-start h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors">
+          <button
+            onClick={handlePasswordChange}
+            disabled={pwSaving || !curPw || !newPw || !confirmPw}
+            className="self-start h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+          >
+            {pwSaving && <Loader2 size={13} className="animate-spin" />}
             Update password
           </button>
         </div>
@@ -243,26 +294,100 @@ const BRAND_COLORS = [
 ];
 
 function BrandTab() {
-  const [name, setName] = useState('Acme Co.');
-  const [color, setColor] = useState(BRAND_COLORS[0]);
-  const [saved, setSaved] = useState({ name, color });
+  const { toast } = useToast();
+  const activeBrand = useBrandStore((s) => s.activeBrand());
+  const updateBrand = useBrandStore((s) => s.updateBrand);
+  const allAccounts = useAccountStore((s) => s.accounts);
+  const fetchAccounts = useAccountStore((s) => s.fetchAccounts);
+  const accountStatus = useAccountStore((s) => s.status);
+  const activeAccounts = allAccounts.filter((a) => a.status === 'Active');
 
-  const dirty = name !== saved.name || color.hex !== saved.color.hex;
-  const save = () => setSaved({ name, color });
-  const discard = () => { setName(saved.name); setColor(saved.color); };
+  useEffect(() => {
+    if (activeBrand && accountStatus === 'idle') {
+      fetchAccounts(activeBrand.id);
+    }
+  }, [activeBrand?.id]);
 
-  const initials = name.trim().slice(0, 2).toUpperCase() || '?';
+  const defaultColor = BRAND_COLORS.find((c) => c.hex.toLowerCase() === activeBrand?.colorHex?.toLowerCase()) ?? BRAND_COLORS[0];
+
+  const [name, setName] = useState(activeBrand?.name ?? '');
+  const [color, setColor] = useState(defaultColor);
+  const [voiceTone, setVoiceTone] = useState(activeBrand?.voiceTone ?? '');
+  const [pillars, setPillars] = useState(activeBrand?.pillars ?? '');
+  const [savedName, setSavedName] = useState(activeBrand?.name ?? '');
+  const [savedColor, setSavedColor] = useState(defaultColor);
+  const [savedVoiceTone, setSavedVoiceTone] = useState(activeBrand?.voiceTone ?? '');
+  const [savedPillars, setSavedPillars] = useState(activeBrand?.pillars ?? '');
+  const [saving, setSaving] = useState(false);
+
+  if (!activeBrand) {
+    return (
+      <div className="py-16 text-center text-gray-400 text-[13px]">
+        No brand selected. Create a brand first.
+      </div>
+    );
+  }
+
+  const dirty =
+    name !== savedName ||
+    color.hex !== savedColor.hex ||
+    voiceTone !== savedVoiceTone ||
+    pillars !== savedPillars;
+
+  const save = async () => {
+    if (!dirty || !activeBrand) return;
+    setSaving(true);
+    try {
+      await updateBrand(activeBrand.id, {
+        name: name.trim() || undefined,
+        colorHex: color.hex,
+        voiceTone: voiceTone || undefined,
+        pillars: pillars || undefined,
+      });
+      setSavedName(name);
+      setSavedColor(color);
+      setSavedVoiceTone(voiceTone);
+      setSavedPillars(pillars);
+      toast('Brand updated', 'success');
+    } catch (err: any) {
+      toast(err?.message ?? 'Failed to update brand', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const discard = () => {
+    setName(savedName);
+    setColor(savedColor);
+    setVoiceTone(savedVoiceTone);
+    setPillars(savedPillars);
+  };
+
+  const initials = (name.trim() || '?').slice(0, 2).toUpperCase();
+
+  const PLATFORM_COLORS: Record<string, string> = {
+    Instagram: 'bg-pink-500',
+    Facebook: 'bg-blue-600',
+    X: 'bg-gray-900',
+    LinkedIn: 'bg-blue-700',
+    TikTok: 'bg-gray-800',
+  };
 
   return (
     <div className="flex flex-col gap-6">
       {/* Brand preview */}
       <div className="flex items-center gap-4 pb-6 border-b border-gray-100">
-        <div className={cn('w-14 h-14 rounded-xl flex items-center justify-center text-white text-[18px] font-bold', color.bg)}>
+        <div
+          className="w-14 h-14 rounded-xl flex items-center justify-center text-white text-[18px] font-bold"
+          style={{ backgroundColor: color.hex }}
+        >
           {initials}
         </div>
         <div>
-          <p className="text-[15px] font-semibold text-gray-900">{saved.name}</p>
-          <p className="text-[13px] text-gray-400">Active brand · 2 connected accounts</p>
+          <p className="text-[15px] font-semibold text-gray-900">{savedName}</p>
+          <p className="text-[13px] text-gray-400">
+            Active brand · {activeAccounts.length} connected account{activeAccounts.length !== 1 ? 's' : ''}
+          </p>
         </div>
       </div>
 
@@ -287,7 +412,34 @@ function BrandTab() {
         </div>
       </div>
 
+      <Field label="Voice & tone" hint="Describe your brand's communication style. Used by AI to generate captions.">
+        <textarea
+          value={voiceTone}
+          onChange={e => setVoiceTone(e.target.value.slice(0, 500))}
+          placeholder="e.g. Friendly, professional, with a touch of humor…"
+          rows={3}
+          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors resize-none"
+        />
+        <p className="text-[11px] text-gray-400 text-right -mt-1">{voiceTone.length}/500</p>
+      </Field>
+
+      <Field label="Content pillars" hint="Core topics your brand posts about. Separate with commas.">
+        <textarea
+          value={pillars}
+          onChange={e => setPillars(e.target.value.slice(0, 500))}
+          placeholder="e.g. Product updates, Industry tips, Behind the scenes…"
+          rows={2}
+          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors resize-none"
+        />
+      </Field>
+
       <SaveBar dirty={dirty} onSave={save} onDiscard={discard} />
+
+      {saving && (
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <Loader2 size={13} className="animate-spin" /> Saving…
+        </div>
+      )}
 
       {/* Connected accounts summary */}
       <div className="pt-4 border-t border-gray-100">
@@ -297,23 +449,24 @@ function BrandTab() {
             Manage <ChevronRight size={13} />
           </a>
         </div>
-        {[
-          { name: 'Instagram', handle: '@relay', color: 'bg-pink-500' },
-          { name: 'LinkedIn',  handle: 'Relay Page', color: 'bg-blue-700' },
-        ].map(acc => (
-          <div key={acc.name} className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
-            <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold', acc.color)}>
-              {acc.name[0]}
+        {activeAccounts.length === 0 ? (
+          <p className="text-[13px] text-gray-400 py-2">No connected accounts yet.</p>
+        ) : (
+          activeAccounts.map(acc => (
+            <div key={acc.id} className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
+              <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold', PLATFORM_COLORS[acc.platform] ?? 'bg-gray-400')}>
+                {acc.platform[0]}
+              </div>
+              <div className="flex-1">
+                <p className="text-[13px] font-medium text-gray-800">{acc.platform}</p>
+                <p className="text-[12px] text-gray-400">{acc.platformHandle}</p>
+              </div>
+              <span className="text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Check size={10} strokeWidth={2.5} /> Connected
+              </span>
             </div>
-            <div className="flex-1">
-              <p className="text-[13px] font-medium text-gray-800">{acc.name}</p>
-              <p className="text-[12px] text-gray-400">{acc.handle}</p>
-            </div>
-            <span className="text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <Check size={10} strokeWidth={2.5} /> Connected
-            </span>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Danger zone */}

@@ -19,6 +19,8 @@ interface AuthState {
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   hydrate: () => Promise<void>;
+  updateProfile: (data: { name?: string; email?: string; bio?: string; avatarUrl?: string }) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 function persistToken(token: string) {
@@ -66,6 +68,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     import('@/store/account').then(({ useAccountStore }) => useAccountStore.getState().reset());
     import('@/store/post').then(({ usePostStore }) => usePostStore.getState().reset());
     set({ user: null, token: null, status: 'unauthenticated' });
+  },
+
+  updateProfile: async (data) => {
+    const updated = await api.patch<AuthUser>('/auth/me', data);
+    set({ user: updated });
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    await api.post('/auth/me/change-password', { currentPassword, newPassword });
   },
 
   hydrate: async () => {

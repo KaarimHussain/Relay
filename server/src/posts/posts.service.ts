@@ -2,16 +2,19 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
+import { AccountsService } from '../accounts/accounts.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { SchedulePostDto } from './dto/schedule-post.dto';
 import { PostStatus } from '@prisma/client';
 import { PUBLISH_QUEUE, PublishJobData } from './workers/publish.processor';
+import { publishToPlatform } from './workers/platform-publisher';
 
 @Injectable()
 export class PostsService {
   constructor(
     private prisma: PrismaService,
+    private accounts: AccountsService,
     @InjectQueue(PUBLISH_QUEUE) private publishQueue: Queue,
   ) {}
 
@@ -54,20 +57,33 @@ export class PostsService {
   async update(brandId: string, postId: string, dto: UpdatePostDto) {
     const post = await this.prisma.post.findFirst({ where: { id: postId, brandId } });
     if (!post) throw new NotFoundException('Post not found');
+
+    // Rebuild targets if provided
+    if (dto.targets?.length) {
+      await this.prisma.postPlatformTarget.deleteMany({ where: { postId } });
+      await this.prisma.postPlatformTarget.createMany({
+        data: dto.targets.map(t => ({
+          postId,
+          accountId: t.accountId,
+          caption: t.caption,
+          hashtags: t.hashtags ?? null,
+        })),
+      });
+    }
+
     return this.prisma.post.update({
       where: { id: postId },
       data: {
-        title: dto.title,
-        scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
+        ...(dto.title && { title: dto.title }),
+        ...(dto.scheduledAt !== undefined && { scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null }),
       },
-      include: { targets: true, media: true },
+      include: { targets: { include: { account: { select: { platform: true, platformHandle: true } } } }, media: true },
     });
   }
 
   async delete(brandId: string, postId: string) {
     const post = await this.prisma.post.findFirst({ where: { id: postId, brandId } });
     if (!post) throw new NotFoundException('Post not found');
-    // Cancel queued jobs for all targets
     const targets = await this.prisma.postPlatformTarget.findMany({ where: { postId } });
     for (const t of targets) {
       if (t.jobId) await this.publishQueue.remove(t.jobId).catch(() => {});
@@ -99,25 +115,52 @@ export class PostsService {
     return this.findOne(brandId, postId);
   }
 
+  // Runs publish logic inline — no queue, no Redis dependency.
   async publishNow(brandId: string, postId: string) {
     const post = await this.findOne(brandId, postId);
     if (!post.targets.length) throw new BadRequestException('Post has no platform targets');
 
-    await this.prisma.post.update({ where: { id: postId }, data: { status: PostStatus.Scheduled } });
+    await this.prisma.post.update({ where: { id: postId }, data: { status: PostStatus.Publishing } });
 
     for (const target of post.targets) {
-      const jobData: PublishJobData = { targetId: target.id, postId, accountId: target.accountId };
-      const job = await this.publishQueue.add('publish', jobData, {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 },
-        jobId: `target-${target.id}-${Date.now()}`,
-      });
       await this.prisma.postPlatformTarget.update({
         where: { id: target.id },
-        data: { status: PostStatus.Scheduled, jobId: job.id },
+        data: { status: PostStatus.Publishing },
       });
+
+      try {
+        const account = await this.accounts.getDecryptedAccount(target.accountId);
+        const externalPostId = await publishToPlatform(
+          account.platform,
+          account.platformUserId,
+          account.accessToken,
+          target.caption,
+          target.hashtags,
+        );
+
+        await this.prisma.postPlatformTarget.update({
+          where: { id: target.id },
+          data: { status: PostStatus.Published, publishedAt: new Date(), externalPostId },
+        });
+      } catch (err: any) {
+        await this.prisma.postPlatformTarget.update({
+          where: { id: target.id },
+          data: { status: PostStatus.Failed, errorMessage: err?.message ?? 'Unknown error' },
+        });
+      }
     }
-    return this.findOne(brandId, postId);
+
+    // Set parent post status based on target outcomes
+    const updatedTargets = await this.prisma.postPlatformTarget.findMany({ where: { postId } });
+    const allPublished = updatedTargets.every(t => t.status === PostStatus.Published);
+    const anyFailed   = updatedTargets.some(t  => t.status === PostStatus.Failed);
+    const finalStatus = allPublished ? PostStatus.Published : anyFailed ? PostStatus.Failed : PostStatus.Publishing;
+
+    return this.prisma.post.update({
+      where: { id: postId },
+      data: { status: finalStatus },
+      include: { targets: { include: { account: { select: { platform: true, platformHandle: true } } } }, media: true },
+    });
   }
 
   async cancel(brandId: string, postId: string) {

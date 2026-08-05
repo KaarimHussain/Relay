@@ -1,10 +1,23 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  Controller, Delete, Get, Param, Post, Query,
+  UploadedFile, UseGuards, UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, resolve } from 'path';
+import { ApiBearerAuth, ApiConsumes, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { MediaService } from './media.service';
-import { UploadUrlDto } from './dto/upload-url.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { BrandMemberGuard } from '../common/guards/brand-member.guard';
 import { CurrentUser } from '../common/decorators/user.decorator';
+
+const storage = diskStorage({
+  destination: resolve(process.cwd(), 'uploads'),
+  filename: (_req, file, cb) => {
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    cb(null, `${unique}${extname(file.originalname)}`);
+  },
+});
 
 @ApiTags('Media')
 @ApiBearerAuth()
@@ -13,9 +26,16 @@ import { CurrentUser } from '../common/decorators/user.decorator';
 export class MediaController {
   constructor(private media: MediaService) {}
 
-  @Post('upload-url')
-  getUploadUrl(@Param('brandId') brandId: string, @CurrentUser() user: any, @Body() dto: UploadUrlDto) {
-    return this.media.getUploadUrl(brandId, user.id, dto);
+  @Post('upload')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file', { storage, limits: { fileSize: 100 * 1024 * 1024 } }))
+  upload(
+    @Param('brandId') brandId: string,
+    @CurrentUser() user: any,
+    @UploadedFile() file: Express.Multer.File,
+    @Query('postId') postId?: string,
+  ) {
+    return this.media.saveUpload(brandId, user.id, file, postId);
   }
 
   @Get()

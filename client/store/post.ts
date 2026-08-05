@@ -39,6 +39,7 @@ interface PostState {
 
   fetchPosts: (brandId: string) => Promise<void>;
   createPost: (brandId: string, dto: CreatePostDto) => Promise<Post>;
+  updatePost: (brandId: string, postId: string, dto: Partial<CreatePostDto>) => Promise<Post>;
   deletePost: (brandId: string, postId: string) => Promise<void>;
   schedulePost: (brandId: string, postId: string, scheduledAt: string) => Promise<Post>;
   publishNow: (brandId: string, postId: string) => Promise<Post>;
@@ -67,6 +68,12 @@ export const usePostStore = create<PostState>((set, get) => ({
     const post = await api.post<Post>(`/brands/${brandId}/posts`, dto);
     set((s) => ({ posts: [post, ...s.posts] }));
     return post;
+  },
+
+  updatePost: async (brandId, postId, dto) => {
+    const updated = await api.patch<Post>(`/brands/${brandId}/posts/${postId}`, dto);
+    set((s) => ({ posts: s.posts.map((p) => (p.id === postId ? updated : p)) }));
+    return updated;
   },
 
   deletePost: async (brandId, postId) => {

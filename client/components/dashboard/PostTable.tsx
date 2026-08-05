@@ -163,7 +163,7 @@ export function PostTable() {
                       <span className="text-xs text-gray-500 font-medium">{formatScheduledAt(post.scheduledAt)}</span>
                     </div>
                     <div className="w-8 shrink-0 flex justify-center">
-                      <Link href="/queue"
+                      <Link href={`/posts/${post.id}/edit`}
                         className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
                         <MoreVertical size={14} />
                       </Link>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Relay — Brand Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --relay-black: #1A1A1A;
+    --relay-gray: #545454;
+    --relay-light: #E8E8E8;
+    --relay-white: #FFFFFF;
+    --relay-accent: #F97316;
+    --relay-success: #22C55E;
+    --relay-error: #EF4444;
+
+    --bg: var(--relay-white);
+    --surface: var(--relay-white);
+    --border: var(--relay-light);
+    --text: var(--relay-black);
+    --text-secondary: var(--relay-gray);
+    --logo-fill: var(--relay-gray);
+  }
+  [data-theme="dark"] {
+    --bg: #121212;
+    --surface: #1E1E1E;
+    --border: #2E2E2E;
+    --text: #F2F2F2;
+    --text-secondary: #A0A0A0;
+    --logo-fill: #F2F2F2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    transition: background 0.2s, color 0.2s;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 32px 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  header svg { width: 40px; height: 40px; }
+  header h1 { margin: 0; font-size: 22px; }
+
+  .theme-toggle {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  main { padding: 48px; max-width: 960px; margin: 0 auto; }
+  section { margin-bottom: 48px; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); margin-bottom: 16px; }
+
+  .swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .swatch { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .swatch .fill { height: 80px; }
+  .swatch .label { padding: 10px 12px; font-size: 12px; font-family: monospace; background: var(--surface); }
+
+  .logo-row { display: flex; gap: 24px; }
+  .logo-card { flex: 1; padding: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+  .logo-card.on-bg { background: var(--bg); border: 1px solid var(--border); }
+  .logo-card.on-black { background: var(--relay-black); }
+  .logo-card svg { width: 80px; height: 80px; }
+
+  .btn-row { display: flex; gap: 12px; align-items: center; }
+  .btn { padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; border: none; cursor: pointer; }
+  .btn-primary { background: var(--relay-accent); color: white; }
+  .btn-success { background: var(--relay-success); color: white; }
+  .btn-error { background: var(--relay-error); color: white; }
+
+  .type-sample { margin-bottom: 12px; }
+  code { font-family: 'JetBrains Mono', monospace; background: var(--surface); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 256 256" fill="none">
+      <path d="M 128 256 L 64 256 L 64 192 L 128 192 Z M 256 256 L 192 256 L 192 192 L 256 192 Z M 64 192 L 0 192 L 0 128 L 64 128 Z M 192 192 L 128 192 L 128 128 L 192 128 Z M 128 128 L 64 128 L 64 64 L 128 64 Z M 256 128 L 192 128 L 192 64 L 256 64 Z M 64 64 L 0 64 L 0 0 L 64 0 Z M 192 64 L 128 64 L 128 0 L 192 0 Z" fill="var(--logo-fill)"/>
+    </svg>
+    <h1>Relay</h1>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()">
+    <span id="theme-icon">🌙</span>
+    <span id="theme-label">Dark mode</span>
+  </button>
+</header>
+
+<main>
+
+  <section>
+    <h2>Logo — on background / on dark</h2>
+    <div class="logo-row">
+      <div class="logo-card on-bg">
+        <svg viewBox="0 0 256 256" fill="none">
+          <path d="M 128 256 L 64 256 L 64 192 L 128 192 Z M 256 256 L 192 256 L 192 192 L 256 192 Z M 64 192 L 0 192 L 0 128 L 64 128 Z M 192 192 L 128 192 L 128 128 L 192 128 Z M 128 128 L 64 128 L 64 64 L 128 64 Z M 256 128 L 192 128 L 192 64 L 256 64 Z M 64 64 L 0 64 L 0 0 L 64 0 Z M 192 64 L 128 64 L 128 0 L 192 0 Z" fill="var(--logo-fill)"/>
+        </svg>
+      </div>
+      <div class="logo-card on-black">
+        <svg viewBox="0 0 256 256" fill="none">
+          <path d="M 128 256 L 64 256 L 64 192 L 128 192 Z M 256 256 L 192 256 L 192 192 L 256 192 Z M 64 192 L 0 192 L 0 128 L 64 128 Z M 192 192 L 128 192 L 128 128 L 192 128 Z M 128 128 L 64 128 L 64 64 L 128 64 Z M 256 128 L 192 128 L 192 64 L 256 64 Z M 64 64 L 0 64 L 0 0 L 64 0 Z M 192 64 L 128 64 L 128 0 L 192 0 Z" fill="#F2F2F2"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Color palette</h2>
+    <div class="swatches">
+      <div class="swatch"><div class="fill" style="background:var(--relay-black)"></div><div class="label">--relay-black<br>#1A1A1A</div></div>
+      <div class="swatch"><div class="fill" style="background:var(--relay-gray)"></div><div class="label">--relay-gray<br>#545454</div></div>
+      <div class="swatch"><div class="fill" style="background:var(--relay-light)"></div><div class="label">--relay-light<br>#E8E8E8</div></div>
+      <div class="swatch"><div class="fill" style="background:var(--relay-white); border-bottom:1px solid var(--relay-light)"></div><div class="label">--relay-white<br>#FFFFFF</div></div>
+      <div class="swatch"><div class="fill" style="background:var(--relay-accent)"></div><div class="label">--relay-accent<br>#F97316</div></div>
+      <div class="swatch"><div class="fill" style="background:var(--relay-success)"></div><div class="label">--relay-success<br>#22C55E</div></div>
+      <div class="swatch"><div class="fill" style="background:var(--relay-error)"></div><div class="label">--relay-error<br>#EF4444</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Buttons / states</h2>
+    <div class="btn-row">
+      <button class="btn btn-primary">Run automation</button>
+      <button class="btn btn-success">Completed</button>
+      <button class="btn btn-error">Failed</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Typography</h2>
+    <div class="type-sample" style="font-size:28px; font-weight:700;">Relay automates your workflow</div>
+    <div class="type-sample" style="font-size:16px; color:var(--text-secondary);">Regular body text goes here — clean, readable, dev-first.</div>
+    <div class="type-sample"><code>const relay = new Agent({ mode: "auto" });</code></div>
+  </section>
+
+</main>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    document.getElementById('theme-icon').textContent = isDark ? '🌙' : '☀️';
+    document.getElementById('theme-label').textContent = isDark ? 'Dark mode' : 'Light mode';
+  }
+</script>
+
+</body>
+</html>

@@ -5,32 +5,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard,
-  Calendar,
-  ListOrdered,
-  BarChart2,
-  Link2,
-  Sparkles,
-  LayoutTemplate,
-  Image,
-  Settings,
-  ChevronsUpDown,
-  Check,
-  Plus,
-  X,
+  LayoutDashboard, Calendar, ListOrdered, BarChart2, Link2,
+  Sparkles, LayoutTemplate, Image, Settings, ChevronsUpDown,
+  Check, Plus, X, AlertCircle, Loader2,
 } from 'lucide-react';
 import { CreateBrandModal } from '@/components/brands/CreateBrandModal';
-
-interface Brand {
-  id: string;
-  name: string;
-  color: string;
-}
-
-const DEFAULT_BRANDS: Brand[] = [
-  { id: '1', name: 'Acme Co.', color: 'bg-orange-500' },
-  { id: '2', name: 'TechBrand Inc.', color: 'bg-emerald-500' },
-];
+import { useBrandStore, Brand } from '@/store/brand';
+import { useAuthStore } from '@/store/auth';
 
 const navItems = [
   { label: 'Dashboard',          icon: LayoutDashboard, href: '/dashboard',   ai: false },
@@ -48,9 +29,9 @@ function BrandAvatar({ brand, size = 'md' }: { brand: Brand; size?: 'sm' | 'md' 
     <div
       className={cn(
         'flex items-center justify-center rounded-md shrink-0 text-white font-bold leading-none',
-        brand.color,
         size === 'sm' ? 'w-4.5 h-4.5 text-[9px]' : 'w-5.5 h-5.5 text-[10px]'
       )}
+      style={{ backgroundColor: brand.colorHex }}
     >
       {brand.name[0].toUpperCase()}
     </div>
@@ -58,12 +39,22 @@ function BrandAvatar({ brand, size = 'md' }: { brand: Brand; size?: 'sm' | 'md' 
 }
 
 function BrandSwitcher() {
-  const [brands, setBrands] = useState<Brand[]>(DEFAULT_BRANDS);
-  const [activeBrand, setActiveBrand] = useState<Brand>(DEFAULT_BRANDS[0]);
+  const { brands, status, error, activeBrand, setActiveBrand, fetchBrands } = useBrandStore();
+  const authStatus = useAuthStore((s) => s.status);
+  const active = activeBrand();
+
   const [open, setOpen] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
+  // Fetch brands once auth is ready
+  useEffect(() => {
+    if (authStatus === 'authenticated' && status === 'idle') {
+      fetchBrands();
+    }
+  }, [authStatus, status, fetchBrands]);
+
+  // Close dropdown on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -72,26 +63,68 @@ function BrandSwitcher() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleBrandCreated = (newBrand: { name: string; color: string }) => {
-    const created: Brand = {
-      id: Date.now().toString(),
-      name: newBrand.name,
-      color: newBrand.color,
-    };
-    setBrands((prev) => [...prev, created]);
-    setActiveBrand(created);
-  };
+  // Loading skeleton
+  if (status === 'idle' || status === 'loading') {
+    return (
+      <div className="px-2.5 py-1.5">
+        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-200/80">
+          <div className="w-5.5 h-5.5 rounded-md bg-gray-200 animate-pulse shrink-0" />
+          <div className="flex-1 h-3 rounded bg-gray-200 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (status === 'error') {
+    return (
+      <div className="px-2.5 py-1.5">
+        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-red-50 border border-red-200">
+          <AlertCircle size={13} className="text-red-500 shrink-0" />
+          <span className="text-xs text-red-600 flex-1 truncate">{error}</span>
+          <button
+            onClick={fetchBrands}
+            className="text-[10px] font-semibold text-red-600 hover:underline shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state — no brands yet
+  if (!brands.length) {
+    return (
+      <>
+        <div className="px-2.5 py-1.5">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex w-full items-center gap-2 px-2.5 py-1.5 rounded-lg border border-dashed border-orange-300 bg-orange-50/50 hover:bg-orange-50 transition-colors text-left"
+          >
+            <div className="w-5.5 h-5.5 rounded-md bg-orange-100 flex items-center justify-center shrink-0">
+              <Plus size={11} className="text-orange-600" />
+            </div>
+            <span className="text-xs font-medium text-orange-600 truncate">Create your first brand</span>
+          </button>
+        </div>
+        {showCreateModal && (
+          <CreateBrandModal onClose={() => setShowCreateModal(false)} />
+        )}
+      </>
+    );
+  }
 
   return (
     <>
       <div ref={ref} className="relative px-2.5 py-1.5">
         <button
           onClick={() => setOpen((v) => !v)}
-          className="flex w-full items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-200/80 hover:bg-gray-100/70 transition-colors text-left group"
+          className="flex w-full items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-200/80 hover:bg-gray-100/70 transition-colors text-left"
         >
-          <BrandAvatar brand={activeBrand} />
+          {active && <BrandAvatar brand={active} />}
           <span className="flex-1 min-w-0 text-xs font-medium text-gray-800 truncate">
-            {activeBrand.name}
+            {active?.name ?? 'Select brand'}
           </span>
           <ChevronsUpDown size={13} className="shrink-0 text-gray-400" />
         </button>
@@ -102,19 +135,22 @@ function BrandSwitcher() {
               Your Brands
             </p>
 
-            {brands.map((brand) => (
-              <button
-                key={brand.id}
-                onClick={() => { setActiveBrand(brand); setOpen(false); }}
-                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors font-medium"
-              >
-                <BrandAvatar brand={brand} size="sm" />
-                <span className="flex-1 min-w-0 text-xs truncate">{brand.name}</span>
-                {brand.id === activeBrand.id && (
-                  <Check size={13} className="shrink-0 text-orange-600 stroke-[2]" />
-                )}
-              </button>
-            ))}
+            <div className="max-h-48 overflow-y-auto">
+              {brands.map((brand) => (
+                <button
+                  key={brand.id}
+                  onClick={() => { setActiveBrand(brand.id); setOpen(false); }}
+                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                >
+                  <BrandAvatar brand={brand} size="sm" />
+                  <span className="flex-1 min-w-0 text-xs truncate">{brand.name}</span>
+                  <span className="text-[9px] text-gray-400 uppercase tracking-wide shrink-0">{brand.role}</span>
+                  {brand.id === active?.id && (
+                    <Check size={13} className="shrink-0 text-orange-600 stroke-[2]" />
+                  )}
+                </button>
+              ))}
+            </div>
 
             <div className="my-1 h-px bg-gray-100" />
 
@@ -132,7 +168,6 @@ function BrandSwitcher() {
       {showCreateModal && (
         <CreateBrandModal
           onClose={() => setShowCreateModal(false)}
-          onCreated={handleBrandCreated}
         />
       )}
     </>
@@ -163,7 +198,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           </svg>
           <span className="text-gray-900 font-bold text-base tracking-tight">Relay</span>
         </div>
-        {/* Close button — mobile only */}
         <button
           onClick={onClose}
           className="md:hidden p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
@@ -178,7 +212,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
       <div className="mx-2.5 my-0.5 h-px bg-gray-100" />
 
-      {/* Nav items */}
+      {/* Nav */}
       <nav className="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -218,7 +252,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         })}
       </nav>
 
-      {/* Settings bottom */}
+      {/* Settings */}
       <div className="px-2 pb-3 pt-1">
         <div className="h-px bg-gray-100 mb-1.5" />
         <Link

@@ -1,46 +1,61 @@
-﻿'use client';
+'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { api, ApiError } from '@/lib/api';
+import { useBrandStore, Brand } from '@/store/brand';
 
 const BRAND_COLORS = [
-  { label: 'Indigo',   bg: 'bg-indigo-500',  hex: '#6366F1' },
-  { label: 'Violet',   bg: 'bg-violet-500',  hex: '#8B5CF6' },
-  { label: 'Sky',      bg: 'bg-sky-500',     hex: '#0EA5E9' },
-  { label: 'Emerald',  bg: 'bg-emerald-500', hex: '#10B981' },
-  { label: 'Amber',    bg: 'bg-amber-500',   hex: '#F59E0B' },
-  { label: 'Rose',     bg: 'bg-rose-500',    hex: '#F43F5E' },
-  { label: 'Pink',     bg: 'bg-pink-500',    hex: '#EC4899' },
-  { label: 'Slate',    bg: 'bg-slate-500',   hex: '#64748B' },
+  { label: 'Indigo',  hex: '#6366F1' },
+  { label: 'Violet',  hex: '#8B5CF6' },
+  { label: 'Sky',     hex: '#0EA5E9' },
+  { label: 'Emerald', hex: '#10B981' },
+  { label: 'Amber',   hex: '#F59E0B' },
+  { label: 'Orange',  hex: '#F97316' },
+  { label: 'Rose',    hex: '#F43F5E' },
+  { label: 'Slate',   hex: '#64748B' },
 ];
 
 interface CreateBrandModalProps {
   onClose: () => void;
-  onCreated?: (brand: { name: string; color: string }) => void;
+  onCreated?: (brand: Brand) => void;
 }
 
 export function CreateBrandModal({ onClose, onCreated }: CreateBrandModalProps) {
+  const addBrand = useBrandStore((s) => s.addBrand);
   const [name, setName] = useState('');
   const [selectedColor, setSelectedColor] = useState(BRAND_COLORS[0]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const overlayRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === overlayRef.current) onClose();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    onCreated?.({ name: trimmed, color: selectedColor.bg });
-    onClose();
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const brand = await api.post<Brand>('/brands', {
+        name: trimmed,
+        colorHex: selectedColor.hex,
+      });
+      addBrand(brand);
+      onCreated?.(brand);
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to create brand');
+      setIsSubmitting(false);
+    }
   };
 
   const initials = name.trim().slice(0, 2).toUpperCase() || '?';
@@ -73,14 +88,19 @@ export function CreateBrandModal({ onClose, onCreated }: CreateBrandModalProps) 
             {/* Preview avatar */}
             <div className="flex justify-center">
               <div
-                className={cn(
-                  'w-14 h-14 rounded-xl flex items-center justify-center text-white text-[18px] font-bold tracking-tight',
-                  selectedColor.bg
-                )}
+                className="w-14 h-14 rounded-xl flex items-center justify-center text-white text-[18px] font-bold tracking-tight transition-colors duration-150"
+                style={{ backgroundColor: selectedColor.hex }}
               >
                 {initials}
               </div>
             </div>
+
+            {/* Error */}
+            {error && (
+              <div className="px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-xs font-medium text-red-700">{error}</p>
+              </div>
+            )}
 
             {/* Brand name */}
             <div className="flex flex-col gap-1.5">
@@ -91,7 +111,7 @@ export function CreateBrandModal({ onClose, onCreated }: CreateBrandModalProps) 
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Acme Co."
-                maxLength={40}
+                maxLength={60}
                 className="w-full h-[38px] px-3 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors"
               />
             </div>
@@ -107,11 +127,11 @@ export function CreateBrandModal({ onClose, onCreated }: CreateBrandModalProps) 
                     onClick={() => setSelectedColor(c)}
                     className={cn(
                       'w-7 h-7 rounded-lg transition-all',
-                      c.bg,
                       selectedColor.hex === c.hex
                         ? 'ring-2 ring-offset-2 ring-gray-400 scale-110'
                         : 'hover:scale-105'
                     )}
+                    style={{ backgroundColor: c.hex }}
                     aria-label={c.label}
                   />
                 ))}
@@ -124,16 +144,18 @@ export function CreateBrandModal({ onClose, onCreated }: CreateBrandModalProps) 
             <button
               type="button"
               onClick={onClose}
-              className="btn-clay-secondary h-[34px] px-4 text-[13px]"
+              disabled={isSubmitting}
+              className="btn-clay-secondary h-[34px] px-4 text-[13px] disabled:opacity-40"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={!name.trim()}
-              className="btn-clay-primary h-[34px] px-4 text-[13px] disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={!name.trim() || isSubmitting}
+              className="btn-clay-primary h-[34px] px-4 text-[13px] disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
-              Create brand
+              {isSubmitting && <Loader2 size={13} className="animate-spin" />}
+              {isSubmitting ? 'Creating…' : 'Create brand'}
             </button>
           </div>
         </form>

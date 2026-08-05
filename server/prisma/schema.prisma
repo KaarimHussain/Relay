@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  Instagram
+  LinkedIn
+  X
+  Facebook
+  TikTok
+}
+
+enum PostStatus {
+  Draft
+  Scheduled
+  Publishing
+  Published
+  Failed
+}
+
+enum MemberRole {
+  Owner
+  Admin
+  Editor
+}
+
+enum AccountStatus {
+  Active
+  Expired
+  Disconnected
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  name         String
+  avatarUrl    String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  memberships  Membership[]
+  posts        Post[]
+}
+
+model Brand {
+  id          String          @id @default(cuid())
+  name        String
+  slug        String          @unique
+  logoUrl     String?
+  colorHex    String          @default("#F97316")
+  voiceTone   String?
+  pillars     String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  memberships Membership[]
+  accounts    SocialAccount[]
+  posts       Post[]
+  media       Media[]
+}
+
+model Membership {
+  id        String     @id @default(cuid())
+  userId    String
+  brandId   String
+  role      MemberRole @default(Editor)
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand     Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, brandId])
+}
+
+model SocialAccount {
+  id             String        @id @default(cuid())
+  brandId        String
+  platform       Platform
+  platformUserId String
+  platformHandle String
+  accessToken    String        @db.Text
+  refreshToken   String?       @db.Text
+  tokenExpiresAt DateTime?
+  status         AccountStatus @default(Active)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  brand          Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  postTargets    PostPlatformTarget[]
+
+  @@unique([brandId, platform, platformUserId])
+}
+
+model Post {
+  id          String     @id @default(cuid())
+  brandId     String
+  authorId    String
+  title       String
+  scheduledAt DateTime?
+  status      PostStatus @default(Draft)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  brand       Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  author      User       @relation(fields: [authorId], references: [id])
+  media       Media[]
+  targets     PostPlatformTarget[]
+}
+
+model Media {
+  id          String   @id @default(cuid())
+  brandId     String
+  postId      String?
+  uploadedBy  String
+  filename    String
+  mimeType    String
+  sizeBytes   Int
+  storageKey  String
+  url         String   @db.Text
+  createdAt   DateTime @default(now())
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  post        Post?    @relation(fields: [postId], references: [id])
+}
+
+model PostPlatformTarget {
+  id             String     @id @default(cuid())
+  postId         String
+  accountId      String
+  caption        String     @db.Text
+  hashtags       String?    @db.Text
+  status         PostStatus @default(Draft)
+  scheduledAt    DateTime?
+  publishedAt    DateTime?
+  externalPostId String?
+  errorMessage   String?    @db.Text
+  jobId          String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  post           Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  account        SocialAccount @relation(fields: [accountId], references: [id])
+  snapshots      AnalyticsSnapshot[]
+
+  @@unique([postId, accountId])
+}
+
+model AnalyticsSnapshot {
+  id          String   @id @default(cuid())
+  targetId    String
+  takenAt     DateTime @default(now())
+  reach       Int      @default(0)
+  impressions Int      @default(0)
+  likes       Int      @default(0)
+  comments    Int      @default(0)
+  shares      Int      @default(0)
+  saves       Int      @default(0)
+  clicks      Int      @default(0)
+  target      PostPlatformTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+}

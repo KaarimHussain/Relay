@@ -63,6 +63,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     clearToken();
     // Lazy import to avoid circular dep — brand store resets its own localStorage key
     import('@/store/brand').then(({ useBrandStore }) => useBrandStore.getState().reset());
+    import('@/store/account').then(({ useAccountStore }) => useAccountStore.getState().reset());
     set({ user: null, token: null, status: 'unauthenticated' });
   },
 

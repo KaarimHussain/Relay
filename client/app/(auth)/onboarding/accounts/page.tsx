@@ -1,5 +1,4 @@
 ﻿import Link from 'next/link';
-import { PlatformCard } from '@/components/accounts/PlatformCard';
 import { PLATFORMS } from '@/components/accounts/platforms';
 
 export default function OnboardingAccountsPage() {
@@ -39,7 +38,15 @@ export default function OnboardingAccountsPage() {
 
         <div className="px-6 pb-5 grid grid-cols-1 gap-2.5">
           {PLATFORMS.map((platform) => (
-            <PlatformCard key={platform.id} platform={platform} compact />
+            <div key={platform.id} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 bg-gray-50">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${platform.color}`}>
+                {platform.icon}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-900">{platform.name}</p>
+                <p className="text-[11px] text-gray-500">{platform.description}</p>
+              </div>
+            </div>
           ))}
         </div>
 

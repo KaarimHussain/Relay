@@ -1,4 +1,5 @@
 import { PlatformDef } from './PlatformCard';
+import { Platform } from '@/store/account';
 
 // ─── Platform SVG Icons ───────────────────────────────────────────────────────
 
@@ -38,51 +39,41 @@ export const PLATFORMS: PlatformDef[] = [
   {
     id: 'instagram',
     name: 'Instagram',
-    handle: '@relay',
     description: 'Share photos, reels & stories',
     color: 'bg-gradient-to-br from-pink-500 via-rose-500 to-amber-400',
-    textColor: 'text-pink-600',
-    borderColor: 'border-pink-200',
+    platform: 'Instagram' as Platform,
     icon: <InstagramIcon />,
   },
   {
     id: 'x',
     name: 'X (Twitter)',
-    handle: '@relay',
     description: 'Post threads and updates',
     color: 'bg-gray-900',
-    textColor: 'text-gray-700',
-    borderColor: 'border-gray-200',
+    platform: 'X' as Platform,
     icon: <XIcon />,
   },
   {
     id: 'linkedin',
     name: 'LinkedIn',
-    handle: 'Relay Page',
     description: 'Publish professional content',
     color: 'bg-blue-700',
-    textColor: 'text-blue-700',
-    borderColor: 'border-blue-200',
+    platform: 'LinkedIn' as Platform,
     icon: <LinkedInIcon />,
   },
   {
     id: 'facebook',
     name: 'Facebook',
-    handle: 'Relay',
     description: 'Reach your Facebook audience',
     color: 'bg-blue-600',
-    textColor: 'text-blue-600',
-    borderColor: 'border-blue-200',
+    platform: 'Facebook' as Platform,
     icon: <FacebookIcon />,
   },
   {
     id: 'tiktok',
     name: 'TikTok',
-    handle: '@relay',
     description: 'Short-form video content',
     color: 'bg-gray-950',
-    textColor: 'text-gray-800',
-    borderColor: 'border-gray-200',
+    platform: 'TikTok' as Platform,
     icon: <TikTokIcon />,
   },
 ];

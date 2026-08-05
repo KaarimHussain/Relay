@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
@@ -9,6 +9,9 @@ interface PasswordInputProps {
   name?: string;
   placeholder?: string;
   className?: string;
+  autoComplete?: string;
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 export function PasswordInput({
@@ -16,6 +19,9 @@ export function PasswordInput({
   name,
   placeholder = '••••••••••••',
   className,
+  autoComplete,
+  value,
+  onChange,
 }: PasswordInputProps) {
   const [show, setShow] = useState(false);
 
@@ -26,6 +32,9 @@ export function PasswordInput({
         name={name}
         type={show ? 'text' : 'password'}
         placeholder={placeholder}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={onChange}
         className={cn(
           'w-full h-[38px] px-3 pr-10 bg-gray-50 border border-gray-200 rounded-lg',
           'text-[13px] text-gray-700 placeholder:text-gray-400 outline-none',

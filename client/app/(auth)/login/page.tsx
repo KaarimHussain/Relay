@@ -1,7 +1,49 @@
-﻿import Link from 'next/link';
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { PasswordInput } from '@/components/auth/PasswordInput';
+import { useAuthStore } from '@/store/auth';
+import { ApiError } from '@/lib/api';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { login, status } = useAuthStore();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // If already authenticated, go to dashboard immediately
+  useEffect(() => {
+    if (status === 'authenticated') {
+      const from = searchParams.get('from') ?? '/dashboard';
+      router.replace(from);
+    }
+  }, [status, router, searchParams]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      await login(email, password);
+      const from = searchParams.get('from') ?? '/dashboard';
+      router.replace(from);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Unable to connect. Please try again.');
+      }
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen py-8 px-4 bg-[#F8F9FA]">
       {/* Logo */}
@@ -19,7 +61,7 @@ export default function LoginPage() {
           <p className="text-xs text-gray-500 font-normal">Sign in to your Relay workspace</p>
         </div>
 
-        {/* Google OAuth */}
+        {/* Google OAuth — placeholder */}
         <button
           type="button"
           className="btn-clay-secondary w-full h-9 text-xs gap-2 mb-4 font-semibold"
@@ -40,8 +82,15 @@ export default function LoginPage() {
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
+        {/* Error banner */}
+        {error && (
+          <div className="mb-3 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-xs font-medium text-red-700">{error}</p>
+          </div>
+        )}
+
         {/* Form */}
-        <form className="flex flex-col gap-3">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <label htmlFor="email" className="text-xs font-semibold text-gray-700">
               Email address
@@ -50,8 +99,12 @@ export default function LoginPage() {
               id="email"
               name="email"
               type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="h-8.5 bg-gray-50 border border-gray-200 rounded-lg text-xs px-3 font-medium outline-none focus:bg-white focus:border-orange-500"
+              className="h-8.5 bg-gray-50 border border-gray-200 rounded-lg text-xs px-3 font-medium outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors"
             />
           </div>
 
@@ -67,14 +120,21 @@ export default function LoginPage() {
                 Forgot?
               </Link>
             </div>
-            <PasswordInput id="password" name="password" />
+            <PasswordInput
+              id="password"
+              name="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
 
           <button
             type="submit"
-            className="btn-clay-primary w-full h-9 text-xs mt-1 font-semibold"
+            disabled={isSubmitting || !email || !password}
+            className="btn-clay-primary w-full h-9 text-xs mt-1 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Sign in
+            {isSubmitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
       </div>

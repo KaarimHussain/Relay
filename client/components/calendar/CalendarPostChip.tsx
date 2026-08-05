@@ -4,7 +4,7 @@ import {
 } from '@/components/ui/platform-icons';
 
 export type CalendarPost = {
-  id: number;
+  id: string;
   title: string;
   platform: 'instagram' | 'x' | 'linkedin' | 'facebook' | 'tiktok';
   status: 'scheduled' | 'published' | 'draft';

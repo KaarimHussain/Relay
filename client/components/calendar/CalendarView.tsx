@@ -1,47 +1,17 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, Clock, Edit2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Clock, Edit2, AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CalendarPostChip, CalendarPost } from './CalendarPostChip';
 import {
   InstagramIcon, XIcon, LinkedInIcon, FacebookIcon, TikTokIcon,
 } from '@/components/ui/platform-icons';
-import { PostComposer } from '@/components/posts/PostComposer';
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-function buildMockPosts(year: number, month: number): CalendarPost[] {
-  return [
-    { id: 1,  title: '5 ways AI is changing content strategy',       platform: 'instagram', status: 'published', time: '9:00 AM'  },
-    { id: 2,  title: 'Behind the scenes: our brainstorm ritual',     platform: 'x',         status: 'published', time: '11:30 AM' },
-    { id: 3,  title: 'LinkedIn growth from 0 to 10K followers',      platform: 'linkedin',  status: 'draft',     time: '—'        },
-    { id: 4,  title: 'New feature drop! Multi-platform previews',    platform: 'instagram', status: 'scheduled', time: '2:00 PM'  },
-    { id: 5,  title: 'Monday motivation: creator advice roundup',    platform: 'facebook',  status: 'scheduled', time: '9:00 AM'  },
-    { id: 6,  title: 'How we write captions that convert',           platform: 'linkedin',  status: 'scheduled', time: '10:00 AM' },
-    { id: 7,  title: 'Trending audio you need this week',            platform: 'tiktok',    status: 'scheduled', time: '5:00 PM'  },
-    { id: 8,  title: 'Your weekly content wrap-up 🎉',               platform: 'instagram', status: 'scheduled', time: '12:00 PM' },
-    { id: 9,  title: 'Thread: social media myths debunked',          platform: 'x',         status: 'scheduled', time: '3:00 PM'  },
-    { id: 10, title: 'Case study: 200% reach increase in 30 days',   platform: 'linkedin',  status: 'scheduled', time: '9:30 AM'  },
-    { id: 11, title: 'Day in the life of a content team',            platform: 'tiktok',    status: 'scheduled', time: '4:00 PM'  },
-    { id: 12, title: 'Q&A: your social media questions answered',    platform: 'instagram', status: 'draft',     time: '—'        },
-    { id: 13, title: 'How to repurpose one post across 5 platforms', platform: 'facebook',  status: 'scheduled', time: '11:00 AM' },
-    { id: 14, title: 'The anatomy of a viral tweet',                 platform: 'x',         status: 'scheduled', time: '2:30 PM'  },
-  ];
-}
-
-function assignPostsToDays(posts: CalendarPost[], year: number, month: number): Map<string, CalendarPost[]> {
-  const map = new Map<string, CalendarPost[]>();
-  const daySlots = [3, 5, 7, 8, 10, 12, 14, 15, 17, 18, 20, 22, 23, 25];
-  posts.forEach((post, i) => {
-    const day = daySlots[i % daySlots.length];
-    const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(post);
-  });
-  return map;
-}
+import { useBrandStore } from '@/store/brand';
+import { usePostStore } from '@/store/post';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -64,14 +34,21 @@ function dateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+// ─── Platform / status maps ───────────────────────────────────────────────────
+
+const PLATFORM_MAP: Record<string, CalendarPost['platform']> = {
+  Instagram: 'instagram', X: 'x', LinkedIn: 'linkedin', Facebook: 'facebook', TikTok: 'tiktok',
+};
+
+const STATUS_MAP: Record<string, CalendarPost['status']> = {
+  Scheduled: 'scheduled', Published: 'published', Publishing: 'scheduled',
+  Draft: 'draft', Failed: 'draft',
+};
+
 // ─── Platform icon map (for detail panel) ────────────────────────────────────
 
 const PLATFORM_ICONS: Record<CalendarPost['platform'], React.ComponentType<{ className?: string }>> = {
-  instagram: InstagramIcon,
-  x: XIcon,
-  linkedin: LinkedInIcon,
-  facebook: FacebookIcon,
-  tiktok: TikTokIcon,
+  instagram: InstagramIcon, x: XIcon, linkedin: LinkedInIcon, facebook: FacebookIcon, tiktok: TikTokIcon,
 };
 
 const PLATFORM_ICON_STYLE: Record<CalendarPost['platform'], string> = {
@@ -101,7 +78,6 @@ function PostDetailModal({ post, onClose }: { post: CalendarPost; onClose: () =>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/25 backdrop-blur-[2px]" onClick={onClose} />
       <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
-        {/* Header */}
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
           <div className="flex items-center gap-3">
             <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', iconStyle)}>
@@ -117,7 +93,6 @@ function PostDetailModal({ post, onClose }: { post: CalendarPost; onClose: () =>
           </button>
         </div>
 
-        {/* Meta row */}
         <div className="flex items-center gap-2 px-5 pb-4 flex-wrap">
           <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold', status.bg, status.text)}>
             <span className={cn('w-1.5 h-1.5 rounded-full', status.dot)} />
@@ -130,33 +105,26 @@ function PostDetailModal({ post, onClose }: { post: CalendarPost; onClose: () =>
           )}
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-2 px-5 pb-5">
-          <button className="flex-1 btn-clay-secondary h-9 text-[13px] gap-1.5 inline-flex items-center justify-center">
-            <Edit2 size={13} /> Edit post
-          </button>
-          <button className="flex-1 btn-clay-primary h-9 text-[13px] inline-flex items-center justify-center">
-            Reschedule
-          </button>
+          <Link href="/queue" onClick={onClose}
+            className="flex-1 btn-clay-secondary h-9 text-[13px] gap-1.5 inline-flex items-center justify-center">
+            <Edit2 size={13} /> View in queue
+          </Link>
+          <Link href="/posts/new" onClick={onClose}
+            className="flex-1 btn-clay-primary h-9 text-[13px] inline-flex items-center justify-center gap-1.5">
+            <Plus size={13} /> New post
+          </Link>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Day overflow panel (shows all posts for a day) ───────────────────────────
+// ─── Day overflow panel ───────────────────────────────────────────────────────
 
 function DayOverflowPanel({
-  date,
-  posts,
-  onPostClick,
-  onClose,
-}: {
-  date: Date;
-  posts: CalendarPost[];
-  onPostClick: (post: CalendarPost) => void;
-  onClose: () => void;
-}) {
+  date, posts, onPostClick, onClose,
+}: { date: Date; posts: CalendarPost[]; onPostClick: (p: CalendarPost) => void; onClose: () => void }) {
   const dayName = WEEKDAYS_FULL[date.getDay()];
   const monthName = MONTHS[date.getMonth()];
 
@@ -164,31 +132,24 @@ function DayOverflowPanel({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/25 backdrop-blur-[2px]" onClick={onClose} />
       <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
           <div>
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{dayName}</p>
-            <p className="text-[18px] font-bold text-gray-900 leading-tight">
-              {monthName} {date.getDate()}
-            </p>
+            <p className="text-[18px] font-bold text-gray-900 leading-tight">{monthName} {date.getDate()}</p>
           </div>
           <button onClick={onClose} className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
             <X size={15} />
           </button>
         </div>
 
-        {/* Posts list */}
         <div className="p-3 flex flex-col gap-1.5 max-h-80 overflow-y-auto">
           {posts.map((post) => {
             const Icon = PLATFORM_ICONS[post.platform];
             const iconStyle = PLATFORM_ICON_STYLE[post.platform];
             const status = STATUS_CONFIG[post.status];
             return (
-              <button
-                key={post.id}
-                onClick={() => { onClose(); onPostClick(post); }}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-colors text-left w-full group"
-              >
+              <button key={post.id} onClick={() => { onClose(); onPostClick(post); }}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-colors text-left w-full group">
                 <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', iconStyle)}>
                   <Icon className="w-3.5 h-3.5" />
                 </div>
@@ -210,11 +171,11 @@ function DayOverflowPanel({
           })}
         </div>
 
-        {/* Footer CTA */}
         <div className="px-4 pb-4 pt-1">
-          <button className="w-full btn-clay-primary h-9 text-[13px] gap-1.5 inline-flex items-center justify-center">
+          <Link href="/posts/new" onClick={onClose}
+            className="w-full btn-clay-primary h-9 text-[13px] gap-1.5 inline-flex items-center justify-center">
             <Plus size={13} strokeWidth={2.5} /> Add post on this day
-          </button>
+          </Link>
         </div>
       </div>
     </div>
@@ -233,23 +194,55 @@ const PLATFORM_FILTERS = [
 ];
 
 export function CalendarView() {
+  const router = useRouter();
   const today = new Date();
   const [year, setYear]                   = useState(today.getFullYear());
   const [month, setMonth]                 = useState(today.getMonth());
   const [selectedPost, setSelectedPost]   = useState<CalendarPost | null>(null);
   const [overflowDay, setOverflowDay]     = useState<{ date: Date; posts: CalendarPost[] } | null>(null);
-  const [composerOpen, setComposerOpen]   = useState(false);
   const [platformFilter, setPlatformFilter] = useState('all');
 
-  const grid        = useMemo(() => getDaysGrid(year, month), [year, month]);
-  const allPosts    = useMemo(() => buildMockPosts(year, month), [year, month]);
-  const postsByDay  = useMemo(() => assignPostsToDays(allPosts, year, month), [allPosts, year, month]);
+  const activeBrand = useBrandStore((s) => s.activeBrand());
+  const { posts, status, error, fetchPosts } = usePostStore();
+
+  useEffect(() => {
+    if (activeBrand) fetchPosts(activeBrand.id);
+  }, [activeBrand?.id]);
+
+  const grid = useMemo(() => getDaysGrid(year, month), [year, month]);
+
+  // Convert real posts to CalendarPost format, indexed by date key
+  const postsByDay = useMemo(() => {
+    const map = new Map<string, CalendarPost[]>();
+    for (const post of posts) {
+      if (!post.scheduledAt && post.status !== 'Published') continue;
+      const dateStr = post.scheduledAt ?? post.updatedAt;
+      const d = new Date(dateStr);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const primaryPlatform = post.targets[0]?.account?.platform;
+      if (!primaryPlatform) continue;
+      const mappedPlatform = PLATFORM_MAP[primaryPlatform];
+      if (!mappedPlatform) continue;
+      const time = post.scheduledAt
+        ? new Date(post.scheduledAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+        : '—';
+      const calPost: CalendarPost = {
+        id: post.id, title: post.title,
+        platform: mappedPlatform,
+        status: STATUS_MAP[post.status] ?? 'draft',
+        time,
+      };
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(calPost);
+    }
+    return map;
+  }, [posts]);
 
   const filteredPostsByDay = useMemo(() => {
     if (platformFilter === 'all') return postsByDay;
     const filtered = new Map<string, CalendarPost[]>();
-    postsByDay.forEach((posts, key) => {
-      const f = posts.filter((p) => p.platform === platformFilter);
+    postsByDay.forEach((dayPosts, key) => {
+      const f = dayPosts.filter((p) => p.platform === platformFilter);
       if (f.length > 0) filtered.set(key, f);
     });
     return filtered;
@@ -260,17 +253,22 @@ export function CalendarView() {
   const goToday   = () => { setYear(today.getFullYear()); setMonth(today.getMonth()); };
 
   const isToday = (date: Date) =>
-    date.getDate() === today.getDate() &&
-    date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear();
-
+    date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
   const isPast = (date: Date) =>
     date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  // Desktop: 2 chips visible, rest in overflow panel
-  // Mobile: 3 icon dots, rest in overflow panel
   const DESKTOP_MAX = 2;
   const MOBILE_MAX  = 3;
+
+  if (!activeBrand) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <AlertCircle size={22} className="text-gray-300" />
+        <p className="text-sm font-medium text-gray-500">No brand selected</p>
+        <p className="text-xs text-gray-400">Select a brand from the sidebar to view your calendar.</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -289,15 +287,13 @@ export function CalendarView() {
               </button>
             </div>
             <h2 className="text-base font-bold text-gray-900 tracking-tight">{MONTHS[month]} {year}</h2>
+            {status === 'loading' && <Loader2 size={14} className="animate-spin text-gray-400" />}
           </div>
 
           <div className="flex items-center gap-2">
-            <select
-              value={platformFilter}
-              onChange={(e) => setPlatformFilter(e.target.value)}
+            <select value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value)}
               className="flex-1 sm:flex-none h-8 px-2.5 pr-7 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 outline-none appearance-none cursor-pointer hover:bg-gray-50 transition-colors"
-              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
-            >
+              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}>
               {PLATFORM_FILTERS.map((f) => (
                 <option key={f.value} value={f.value}>{f.label}</option>
               ))}
@@ -307,6 +303,14 @@ export function CalendarView() {
             </Link>
           </div>
         </div>
+
+        {/* Error */}
+        {status === 'error' && error && (
+          <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl">
+            <AlertCircle size={14} className="text-red-500 shrink-0" />
+            <p className="text-xs font-medium text-red-700">{error}</p>
+          </div>
+        )}
 
         {/* Calendar grid */}
         <div className="flex-1 flex flex-col bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-2xs">
@@ -325,24 +329,20 @@ export function CalendarView() {
           <div className="flex-1 grid grid-cols-7" style={{ gridAutoRows: '1fr' }}>
             {grid.map((date, i) => {
               const key = date ? dateKey(date) : `empty-${i}`;
-              const posts = (date && filteredPostsByDay.get(dateKey(date))) ?? [];
+              const dayPosts = (date && filteredPostsByDay.get(dateKey(date))) ?? [];
               const todayCell = date ? isToday(date) : false;
               const pastCell  = date ? isPast(date) : false;
               const isLastRow = i >= grid.length - 7;
               const isLastCol = (i + 1) % 7 === 0;
 
-              // Desktop slots
-              const desktopVisible  = posts.slice(0, DESKTOP_MAX);
-              const desktopOverflow = posts.length - DESKTOP_MAX;
-
-              // Mobile slots (icon-only)
-              const mobileVisible  = posts.slice(0, MOBILE_MAX);
-              const mobileOverflow = posts.length - MOBILE_MAX;
+              const desktopVisible  = dayPosts.slice(0, DESKTOP_MAX);
+              const desktopOverflow = dayPosts.length - DESKTOP_MAX;
+              const mobileVisible  = dayPosts.slice(0, MOBILE_MAX);
+              const mobileOverflow = dayPosts.length - MOBILE_MAX;
 
               return (
-                <div
-                  key={key}
-                  onClick={() => date && setComposerOpen(true)}
+                <div key={key}
+                  onClick={() => date && router.push('/posts/new')}
                   className={cn(
                     'border-b border-r border-gray-100 flex flex-col',
                     'min-h-[80px] sm:min-h-[110px]',
@@ -356,66 +356,48 @@ export function CalendarView() {
                 >
                   {date && (
                     <>
-                      {/* Date number */}
                       <div className="flex items-center justify-between px-1.5 sm:px-2 pt-1.5 sm:pt-2 pb-1">
-                        <span
-                          className={cn(
-                            'w-6 h-6 flex items-center justify-center rounded-full text-[12px] font-semibold leading-none transition-colors',
-                            todayCell
-                              ? 'bg-orange-500 text-white shadow-sm'
-                              : pastCell
-                              ? 'text-gray-300'
-                              : 'text-gray-700 hover:bg-gray-100'
-                          )}
-                        >
+                        <span className={cn(
+                          'w-6 h-6 flex items-center justify-center rounded-full text-[12px] font-semibold leading-none transition-colors',
+                          todayCell ? 'bg-orange-500 text-white shadow-sm'
+                            : pastCell ? 'text-gray-300'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        )}>
                           {date.getDate()}
                         </span>
-                        {posts.length > 0 && (
-                          <span className={cn(
-                            'text-[9px] font-bold rounded-full px-1.5 py-0.5 tabular-nums',
-                            todayCell ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'
-                          )}>
-                            {posts.length}
+                        {dayPosts.length > 0 && (
+                          <span className={cn('text-[9px] font-bold rounded-full px-1.5 py-0.5 tabular-nums',
+                            todayCell ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400')}>
+                            {dayPosts.length}
                           </span>
                         )}
                       </div>
 
-                      {/* ── Desktop chips ── */}
+                      {/* Desktop chips */}
                       <div className="hidden sm:flex flex-col gap-[3px] px-1.5 pb-1.5 flex-1">
                         {desktopVisible.map((post) => (
-                          <CalendarPostChip
-                            key={post.id}
-                            post={post}
-                            onClick={() => setSelectedPost(post)}
-                          />
+                          <CalendarPostChip key={post.id} post={post}
+                            onClick={() => setSelectedPost(post)} />
                         ))}
                         {desktopOverflow > 0 && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setOverflowDay({ date, posts }); }}
-                            className="w-full text-left text-[10px] font-semibold text-orange-500 hover:text-orange-700 px-1.5 py-0.5 rounded-md hover:bg-orange-50 transition-colors"
-                          >
+                          <button type="button"
+                            onClick={(e) => { e.stopPropagation(); setOverflowDay({ date, posts: dayPosts }); }}
+                            className="w-full text-left text-[10px] font-semibold text-orange-500 hover:text-orange-700 px-1.5 py-0.5 rounded-md hover:bg-orange-50 transition-colors">
                             +{desktopOverflow} more
                           </button>
                         )}
                       </div>
 
-                      {/* ── Mobile icon dots ── */}
+                      {/* Mobile icon dots */}
                       <div className="sm:hidden flex items-start gap-0.5 px-1 pb-1 flex-wrap">
                         {mobileVisible.map((post) => (
-                          <CalendarPostChip
-                            key={post.id}
-                            post={post}
-                            compact
-                            onClick={() => setSelectedPost(post)}
-                          />
+                          <CalendarPostChip key={post.id} post={post} compact
+                            onClick={() => setSelectedPost(post)} />
                         ))}
                         {mobileOverflow > 0 && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setOverflowDay({ date, posts }); }}
-                            className="w-5 h-5 rounded-md bg-gray-100 text-gray-500 text-[9px] font-bold flex items-center justify-center hover:bg-gray-200 transition-colors"
-                          >
+                          <button type="button"
+                            onClick={(e) => { e.stopPropagation(); setOverflowDay({ date, posts: dayPosts }); }}
+                            className="w-5 h-5 rounded-md bg-gray-100 text-gray-500 text-[9px] font-bold flex items-center justify-center hover:bg-gray-200 transition-colors">
                             +{mobileOverflow}
                           </button>
                         )}
@@ -427,6 +409,16 @@ export function CalendarView() {
             })}
           </div>
         </div>
+
+        {/* Empty state */}
+        {status === 'ready' && posts.length === 0 && (
+          <div className="flex flex-col items-center gap-2 py-4">
+            <p className="text-xs text-gray-400">No posts scheduled yet.</p>
+            <Link href="/posts/new" className="btn-clay-primary h-7 px-3 text-xs font-semibold inline-flex items-center gap-1">
+              <Plus size={12} /> Create your first post
+            </Link>
+          </div>
+        )}
 
         {/* Legend */}
         <div className="flex items-center gap-4 flex-wrap">
@@ -443,12 +435,10 @@ export function CalendarView() {
         </div>
       </div>
 
-      {/* Post detail modal */}
       {selectedPost && (
         <PostDetailModal post={selectedPost} onClose={() => setSelectedPost(null)} />
       )}
 
-      {/* Day overflow panel */}
       {overflowDay && (
         <DayOverflowPanel
           date={overflowDay.date}
@@ -457,9 +447,6 @@ export function CalendarView() {
           onClose={() => setOverflowDay(null)}
         />
       )}
-
-      {/* New post composer */}
-      {composerOpen && <PostComposer onClose={() => setComposerOpen(false)} />}
     </>
   );
 }

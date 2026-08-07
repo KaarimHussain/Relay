@@ -18,6 +18,19 @@ export class AnalyticsController {
     return this.analytics.overview(brandId, from, to);
   }
 
+  @Get('time-series')
+  @ApiQuery({ name: 'metric', required: false })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  timeSeries(
+    @Param('brandId') brandId: string,
+    @Query('metric') metric = 'reach',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.analytics.timeSeries(brandId, metric, from, to);
+  }
+
   @Get('posts/:postId')
   postBreakdown(@Param('brandId') brandId: string, @Param('postId') postId: string) {
     return this.analytics.postBreakdown(brandId, postId);

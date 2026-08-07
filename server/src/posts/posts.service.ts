@@ -1,13 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { SchedulePostDto } from './dto/schedule-post.dto';
 import { PostStatus } from '@prisma/client';
-import { PUBLISH_QUEUE, PublishJobData } from './workers/publish.processor';
 import { publishToPlatform } from './workers/platform-publisher';
 
 @Injectable()
@@ -15,7 +12,6 @@ export class PostsService {
   constructor(
     private prisma: PrismaService,
     private accounts: AccountsService,
-    @InjectQueue(PUBLISH_QUEUE) private publishQueue: Queue,
   ) {}
 
   async create(brandId: string, userId: string, dto: CreatePostDto) {
@@ -58,7 +54,6 @@ export class PostsService {
     const post = await this.prisma.post.findFirst({ where: { id: postId, brandId } });
     if (!post) throw new NotFoundException('Post not found');
 
-    // Rebuild targets if provided
     if (dto.targets?.length) {
       await this.prisma.postPlatformTarget.deleteMany({ where: { postId } });
       await this.prisma.postPlatformTarget.createMany({
@@ -76,6 +71,11 @@ export class PostsService {
       data: {
         ...(dto.title && { title: dto.title }),
         ...(dto.scheduledAt !== undefined && { scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null }),
+        ...(dto.mediaIds !== undefined && {
+          media: {
+            set: dto.mediaIds.map(id => ({ id })),
+          },
+        }),
       },
       include: { targets: { include: { account: { select: { platform: true, platformHandle: true } } } }, media: true },
     });
@@ -84,10 +84,6 @@ export class PostsService {
   async delete(brandId: string, postId: string) {
     const post = await this.prisma.post.findFirst({ where: { id: postId, brandId } });
     if (!post) throw new NotFoundException('Post not found');
-    const targets = await this.prisma.postPlatformTarget.findMany({ where: { postId } });
-    for (const t of targets) {
-      if (t.jobId) await this.publishQueue.remove(t.jobId).catch(() => {});
-    }
     return this.prisma.post.delete({ where: { id: postId } });
   }
 
@@ -95,23 +91,13 @@ export class PostsService {
     const post = await this.findOne(brandId, postId);
     if (!post.targets.length) throw new BadRequestException('Post has no platform targets');
     const scheduledAt = new Date(dto.scheduledAt);
-    const delay = Math.max(0, scheduledAt.getTime() - Date.now());
 
     await this.prisma.post.update({ where: { id: postId }, data: { status: PostStatus.Scheduled, scheduledAt } });
+    await this.prisma.postPlatformTarget.updateMany({
+      where: { postId },
+      data: { status: PostStatus.Scheduled, scheduledAt },
+    });
 
-    for (const target of post.targets) {
-      const jobData: PublishJobData = { targetId: target.id, postId, accountId: target.accountId };
-      const job = await this.publishQueue.add('publish', jobData, {
-        delay,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-        jobId: `target-${target.id}`,
-      });
-      await this.prisma.postPlatformTarget.update({
-        where: { id: target.id },
-        data: { status: PostStatus.Scheduled, scheduledAt, jobId: job.id },
-      });
-    }
     return this.findOne(brandId, postId);
   }
 
@@ -136,8 +122,8 @@ export class PostsService {
           account.accessToken,
           target.caption,
           target.hashtags,
+          post.media.map(m => ({ url: m.url, mimeType: m.mimeType })),
         );
-
         await this.prisma.postPlatformTarget.update({
           where: { id: target.id },
           data: { status: PostStatus.Published, publishedAt: new Date(), externalPostId },
@@ -150,7 +136,6 @@ export class PostsService {
       }
     }
 
-    // Set parent post status based on target outcomes
     const updatedTargets = await this.prisma.postPlatformTarget.findMany({ where: { postId } });
     const allPublished = updatedTargets.every(t => t.status === PostStatus.Published);
     const anyFailed   = updatedTargets.some(t  => t.status === PostStatus.Failed);
@@ -165,13 +150,26 @@ export class PostsService {
 
   async cancel(brandId: string, postId: string) {
     const post = await this.findOne(brandId, postId);
-    for (const target of post.targets) {
-      if (target.jobId) await this.publishQueue.remove(target.jobId).catch(() => {});
-      await this.prisma.postPlatformTarget.update({
-        where: { id: target.id },
-        data: { status: PostStatus.Draft, jobId: null, scheduledAt: null },
-      });
+    await this.prisma.postPlatformTarget.updateMany({
+      where: { postId: post.id },
+      data: { status: PostStatus.Draft, scheduledAt: null },
+    });
+    return this.prisma.post.update({
+      where: { id: postId },
+      data: { status: PostStatus.Draft, scheduledAt: null },
+    });
+  }
+
+  // Called by PostScheduler — publishes all overdue scheduled posts.
+  async publishDueScheduledPosts() {
+    const now = new Date();
+    const duePosts = await this.prisma.post.findMany({
+      where: { status: PostStatus.Scheduled, scheduledAt: { lte: now } },
+      include: { targets: true },
+    });
+
+    for (const post of duePosts) {
+      await this.publishNow(post.brandId, post.id).catch(() => {});
     }
-    return this.prisma.post.update({ where: { id: postId }, data: { status: PostStatus.Draft, scheduledAt: null } });
   }
 }

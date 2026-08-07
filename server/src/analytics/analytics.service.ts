@@ -69,6 +69,42 @@ export class AnalyticsService {
     }));
   }
 
+  async timeSeries(brandId: string, metric: string, from?: string, to?: string) {
+    const fromDate = from ? new Date(from) : new Date(Date.now() - 30 * 86_400_000);
+    const toDate = to ? new Date(to) : new Date();
+
+    const snapshots = await this.prisma.analyticsSnapshot.findMany({
+      where: {
+        takenAt: { gte: fromDate, lte: toDate },
+        target: { post: { brandId } },
+      },
+      orderBy: { takenAt: 'asc' },
+    });
+
+    // Pre-fill every day in the range with 0
+    const byDay = new Map<string, number>();
+    const cursor = new Date(fromDate);
+    while (cursor <= toDate) {
+      byDay.set(cursor.toISOString().slice(0, 10), 0);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    const validMetrics = new Set(['reach', 'impressions', 'likes', 'comments', 'shares', 'saves', 'clicks']);
+    for (const snap of snapshots) {
+      const key = snap.takenAt.toISOString().slice(0, 10);
+      const current = byDay.get(key) ?? 0;
+      let value = 0;
+      if (metric === 'engagements') {
+        value = snap.likes + snap.comments + snap.shares;
+      } else if (validMetrics.has(metric)) {
+        value = (snap as unknown as Record<string, number>)[metric] ?? 0;
+      }
+      byDay.set(key, current + value);
+    }
+
+    return Array.from(byDay.entries()).map(([date, value]) => ({ date, value }));
+  }
+
   // Called by the scheduled analytics job
   async recordSnapshot(targetId: string, metrics: {
     reach: number; impressions: number; likes: number; comments: number;

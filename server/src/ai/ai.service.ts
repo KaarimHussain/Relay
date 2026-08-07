@@ -2,6 +2,9 @@ import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { GenerateCaptionDto } from './dto/generate-caption.dto';
+import { GenerateIdeasDto } from './dto/generate-ideas.dto';
+import { GenerateHashtagsDto } from './dto/generate-hashtags.dto';
+import { ImproveCaptionDto } from './dto/improve-caption.dto';
 import OpenAI from 'openai';
 
 const PLATFORM_HINTS: Record<string, string> = {
@@ -87,6 +90,160 @@ export class AiService {
 
     try {
       return JSON.parse(content) as { variations: { caption: string; hashtags: string[] }[] };
+    } catch {
+      throw new InternalServerErrorException('Failed to parse AI response');
+    }
+  }
+
+  async generateIdeas(brandId: string, dto: GenerateIdeasDto) {
+    const brand = await this.prisma.brand.findUniqueOrThrow({ where: { id: brandId } });
+    const model = dto.model ?? this.defaultModel;
+    const pillarsText = dto.pillars?.length ? dto.pillars.join(', ') : (brand.pillars ?? 'general content');
+
+    const systemPrompt = [
+      `You are a social media strategist for the brand "${brand.name}".`,
+      brand.voiceTone ? `Brand voice/tone: ${brand.voiceTone}.` : '',
+      `Generate content ideas for the following niche: ${dto.niche}.`,
+      `Content pillars to focus on: ${pillarsText}.`,
+      'Return ONLY valid JSON matching the schema. No markdown, no explanations.',
+    ].filter(Boolean).join(' ');
+
+    const userPrompt = `Generate 4 diverse content ideas that cover different themes and platforms. Each idea should have a strong hook that stops the scroll.`;
+
+    const response = await this.openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'ideas_response',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              ideas: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    theme:    { type: 'string' },
+                    platform: { type: 'string' },
+                    hook:     { type: 'string' },
+                    title:    { type: 'string' },
+                    cta:      { type: 'string' },
+                  },
+                  required: ['theme', 'platform', 'hook', 'title', 'cta'],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ['ideas'],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) throw new InternalServerErrorException('Empty AI response');
+
+    try {
+      return JSON.parse(content) as { ideas: { theme: string; platform: string; hook: string; title: string; cta: string }[] };
+    } catch {
+      throw new InternalServerErrorException('Failed to parse AI response');
+    }
+  }
+
+  async improveCaption(brandId: string, dto: ImproveCaptionDto) {
+    const brand = await this.prisma.brand.findUniqueOrThrow({ where: { id: brandId } });
+    const model = dto.model ?? this.defaultModel;
+
+    const actionInstruction = dto.action === 'add-hook'
+      ? 'Rewrite this caption by adding a compelling viral hook at the very start that stops the scroll. Keep the rest of the message intact.'
+      : 'Rewrite this caption to improve its tone — make it more engaging, clear, and on-brand. Preserve the core message.';
+
+    const systemPrompt = [
+      `You are a social media copywriter for the brand "${brand.name}".`,
+      brand.voiceTone ? `Brand voice/tone: ${brand.voiceTone}.` : '',
+      actionInstruction,
+      'Return ONLY valid JSON matching the schema. No markdown, no explanations.',
+    ].filter(Boolean).join(' ');
+
+    const response = await this.openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Original caption:\n${dto.caption}` },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'improve_caption_response',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: { improved: { type: 'string' } },
+            required: ['improved'],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) throw new InternalServerErrorException('Empty AI response');
+
+    try {
+      return JSON.parse(content) as { improved: string };
+    } catch {
+      throw new InternalServerErrorException('Failed to parse AI response');
+    }
+  }
+
+  async generateHashtags(brandId: string, dto: GenerateHashtagsDto) {
+    const brand = await this.prisma.brand.findUniqueOrThrow({ where: { id: brandId } });
+    const model = dto.model ?? this.defaultModel;
+
+    const systemPrompt = [
+      `You are a social media hashtag strategist for the brand "${brand.name}".`,
+      brand.pillars ? `Content pillars: ${brand.pillars}.` : '',
+      'Return ONLY valid JSON matching the schema. No markdown, no explanations.',
+    ].filter(Boolean).join(' ');
+
+    const userPrompt = `Generate hashtags for the topic: "${dto.topic}". Provide two groups: 5 popular broad-reach hashtags and 5 niche targeted hashtags. Each hashtag must start with #.`;
+
+    const response = await this.openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'hashtags_response',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              popular: { type: 'array', items: { type: 'string' } },
+              niche:   { type: 'array', items: { type: 'string' } },
+            },
+            required: ['popular', 'niche'],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) throw new InternalServerErrorException('Empty AI response');
+
+    try {
+      return JSON.parse(content) as { popular: string[]; niche: string[] };
     } catch {
       throw new InternalServerErrorException('Failed to parse AI response');
     }

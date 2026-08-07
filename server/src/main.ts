@@ -3,15 +3,9 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { resolve } from 'path';
-import * as fs from 'fs';
 
 async function bootstrap() {
-  const uploadsDir = resolve(process.cwd(), 'uploads');
-  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.useStaticAssets(uploadsDir, { prefix: '/uploads' });
 
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));

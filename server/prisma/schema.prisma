@@ -57,10 +57,25 @@ model Brand {
   pillars     String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
-  memberships Membership[]
-  accounts    SocialAccount[]
-  posts       Post[]
-  media       Media[]
+  memberships  Membership[]
+  accounts     SocialAccount[]
+  posts        Post[]
+  media        Media[]
+  templates    Template[]
+  comments     Comment[]
+  autoReplies  AutoReply[]
+}
+
+model Template {
+  id        String   @id @default(cuid())
+  brandId   String
+  name      String
+  category  String
+  platforms String   @db.Text
+  caption   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 }
 
 model Membership {
@@ -89,6 +104,7 @@ model SocialAccount {
   updatedAt      DateTime      @updatedAt
   brand          Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
   postTargets    PostPlatformTarget[]
+  comments       Comment[]
 
   @@unique([brandId, platform, platformUserId])
 }
@@ -134,14 +150,53 @@ model PostPlatformTarget {
   publishedAt    DateTime?
   externalPostId String?
   errorMessage   String?    @db.Text
-  jobId          String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   post           Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
   account        SocialAccount @relation(fields: [accountId], references: [id])
   snapshots      AnalyticsSnapshot[]
+  comments       Comment[]
 
   @@unique([postId, accountId])
+}
+
+model Comment {
+  id             String    @id @default(cuid())
+  brandId        String
+  accountId      String
+  targetId       String?
+  externalId     String
+  externalPostId String
+  platform       Platform
+  authorName     String
+  authorId       String?
+  text           String    @db.Text
+  isReply        Boolean   @default(false)
+  autoReplied    Boolean   @default(false)
+  repliedAt      DateTime?
+  postedAt       DateTime
+  fetchedAt      DateTime  @default(now())
+  brand          Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  account        SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  target         PostPlatformTarget? @relation(fields: [targetId], references: [id])
+
+  @@unique([platform, externalId])
+  @@index([brandId, platform])
+}
+
+model AutoReply {
+  id          String   @id @default(cuid())
+  brandId     String
+  platform    Platform
+  isEnabled   Boolean  @default(true)
+  replyText   String   @db.Text
+  triggerType String   @default("all")
+  keywords    String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, platform])
 }
 
 model AnalyticsSnapshot {

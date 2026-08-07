@@ -1,16 +1,12 @@
 import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bullmq';
 import { PostsService } from './posts.service';
 import { PostsController } from './posts.controller';
-import { PublishProcessor, PUBLISH_QUEUE } from './workers/publish.processor';
+import { PostScheduler } from './workers/post.scheduler';
 import { AccountsModule } from '../accounts/accounts.module';
 
 @Module({
-  imports: [
-    BullModule.registerQueue({ name: PUBLISH_QUEUE }),
-    AccountsModule,
-  ],
+  imports: [AccountsModule],
   controllers: [PostsController],
-  providers: [PostsService, PublishProcessor],
+  providers: [PostsService, PostScheduler],
 })
 export class PostsModule {}

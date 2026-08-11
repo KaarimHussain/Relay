@@ -1,21 +1,23 @@
 ﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  User, Building2, Bell, CreditCard, Users,
+  User, Building2, Bell, CreditCard,
   Camera, Check, AlertTriangle, ChevronRight,
-  Zap, Shield, Mail, Crown, Pencil, Eye, Trash2,
-  UserPlus, Clock, MoreHorizontal, ChevronDown, Loader2,
+  Zap, Shield, Loader2, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { useBrandStore } from '@/store/brand';
 import { useAccountStore } from '@/store/account';
 import { useToast } from '@/components/ui/toast';
+import { DEFAULT_NOTIFICATION_PREFS, loadNotificationPrefs, saveNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
+import { api } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'brand' | 'notifications' | 'billing' | 'team';
+type Tab = 'profile' | 'brand' | 'notifications' | 'billing';
 
 // ─── Shared form primitives ───────────────────────────────────────────────────
 
@@ -135,9 +137,12 @@ function NotifRow({
 
 function ProfileTab() {
   const { toast } = useToast();
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const updateProfile = useAuthStore((s) => s.updateProfile);
   const changePassword = useAuthStore((s) => s.changePassword);
+  const uploadAvatar = useAuthStore((s) => s.uploadAvatar);
+  const deleteAccount = useAuthStore((s) => s.deleteAccount);
 
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
@@ -152,6 +157,9 @@ function ProfileTab() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatarUrl ?? null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const dirty = name !== savedName || email !== savedEmail;
 
@@ -172,12 +180,28 @@ function ProfileTab() {
 
   const discard = () => { setName(savedName); setEmail(savedEmail); };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setAvatarPreview(URL.createObjectURL(file));
-    // Avatar upload via presigned URL would go here in production
-    toast('Avatar preview updated (upload not yet wired)', 'info');
+    e.target.value = '';
+
+    if (!file.type.startsWith('image/')) { toast('Please choose an image file', 'error'); return; }
+    if (file.size > 5 * 1024 * 1024) { toast('Image must be under 5MB', 'error'); return; }
+
+    const localPreview = URL.createObjectURL(file);
+    setAvatarPreview(localPreview);
+    setAvatarUploading(true);
+    try {
+      await uploadAvatar(file);
+      setAvatarPreview(useAuthStore.getState().user?.avatarUrl ?? null);
+      toast('Avatar updated', 'success');
+    } catch (err: any) {
+      setAvatarPreview(user?.avatarUrl ?? null);
+      toast(err?.message ?? 'Failed to upload avatar', 'error');
+    } finally {
+      setAvatarUploading(false);
+      URL.revokeObjectURL(localPreview);
+    }
   };
 
   const handlePasswordChange = async () => {
@@ -208,10 +232,16 @@ function ProfileTab() {
               ? <img src={avatarPreview} alt="" className="w-full h-full object-cover" />
               : initials
             }
+            {avatarUploading && (
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-full">
+                <Loader2 size={18} className="animate-spin text-white" />
+              </div>
+            )}
           </div>
           <button
             onClick={() => fileRef.current?.click()}
-            className="absolute -bottom-1 -right-1 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:bg-gray-50 transition-colors"
+            disabled={avatarUploading}
+            className="absolute -bottom-1 -right-1 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             <Camera size={11} className="text-gray-500" />
           </button>
@@ -220,8 +250,12 @@ function ProfileTab() {
         <div>
           <p className="text-[14px] font-semibold text-gray-900">{savedName}</p>
           <p className="text-[13px] text-gray-400">{savedEmail}</p>
-          <button onClick={() => fileRef.current?.click()} className="text-[12px] text-orange-500 hover:text-orange-600 mt-1 transition-colors">
-            Change photo
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={avatarUploading}
+            className="text-[12px] text-orange-500 hover:text-orange-600 mt-1 transition-colors disabled:opacity-50"
+          >
+            {avatarUploading ? 'Uploading…' : 'Change photo'}
           </button>
         </div>
       </div>
@@ -272,9 +306,98 @@ function ProfileTab() {
       <div className="pt-4 border-t border-red-100">
         <p className="text-[15px] font-semibold text-gray-900 mb-1">Danger zone</p>
         <p className="text-[13px] text-gray-400 mb-4">Permanently delete your account and all associated data.</p>
-        <button className="h-9 px-4 text-[13px] font-medium text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-2">
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          className="h-9 px-4 text-[13px] font-medium text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-2"
+        >
           <AlertTriangle size={14} /> Delete account
         </button>
+      </div>
+
+      {showDeleteModal && (
+        <DeleteAccountModal
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={async (password) => {
+            await deleteAccount(password);
+            toast('Account deleted', 'info');
+            router.replace('/login');
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Delete account confirmation ──────────────────────────────────────────────
+
+function DeleteAccountModal({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onConfirm: (password: string) => Promise<void>;
+}) {
+  const { toast } = useToast();
+  const [password, setPassword] = useState('');
+  const [confirmText, setConfirmText] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const canDelete = password.length > 0 && confirmText.trim().toUpperCase() === 'DELETE' && !loading;
+
+  const handleConfirm = async () => {
+    if (!canDelete) return;
+    setLoading(true);
+    try {
+      await onConfirm(password);
+    } catch (err: any) {
+      toast(err?.message ?? 'Failed to delete account', 'error');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]" onClick={onClose}>
+      <div
+        className="w-full max-w-[420px] bg-white rounded-xl border border-gray-200 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 p-5 pb-4 border-b border-gray-100">
+          <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+            <AlertTriangle size={16} className="text-red-500" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-[15px] font-bold text-gray-900">Delete your account</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              This permanently deletes your account, brands you solely own, and all their posts, media, and connected accounts. This cannot be undone.
+            </p>
+          </div>
+          <button onClick={onClose} className="shrink-0 text-gray-400 hover:text-gray-600 -mt-1 -mr-1 p-1">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-5 flex flex-col gap-4">
+          <Field label="Confirm your password">
+            <TextInput type="password" value={password} onChange={setPassword} placeholder="••••••••" />
+          </Field>
+          <Field label='Type "DELETE" to confirm'>
+            <TextInput value={confirmText} onChange={setConfirmText} placeholder="DELETE" />
+          </Field>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-5 py-4 bg-gray-50 border-t border-gray-100 rounded-b-xl">
+          <button onClick={onClose} className="text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!canDelete}
+            className="h-9 px-4 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+          >
+            {loading && <Loader2 size={13} className="animate-spin" />}
+            Delete my account
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -486,19 +609,33 @@ function BrandTab() {
 // ─── Notifications tab ────────────────────────────────────────────────────────
 
 function NotificationsTab() {
-  const [prefs, setPrefs] = useState({
-    postPublished:   true,
-    postFailed:      true,
-    weeklyDigest:    true,
-    newFollowers:    false,
-    aiSuggestions:   true,
-    teamActivity:    false,
-    billingAlerts:   true,
-    productUpdates:  false,
-  });
+  const user = useAuthStore((s) => s.user);
+  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
+  const [loaded, setLoaded] = useState(false);
 
-  const set = (key: keyof typeof prefs) => (v: boolean) =>
-    setPrefs(p => ({ ...p, [key]: v }));
+  useEffect(() => {
+    if (!user?.id) return;
+    // Seed from local cache immediately so there's no flash of defaults,
+    // then overwrite with the server value (cross-device source of truth).
+    setPrefs(loadNotificationPrefs(user.id));
+    setLoaded(true);
+    api.get<NotificationPrefs>('/auth/me/notification-prefs').then((serverPrefs) => {
+      setPrefs(serverPrefs);
+      saveNotificationPrefs(user.id, serverPrefs);
+    }).catch(() => { /* network error — local cache is fine */ });
+  }, [user?.id]);
+
+  const set = (key: keyof NotificationPrefs) => (v: boolean) => {
+    if (!user?.id) return;
+    setPrefs(p => {
+      const next = { ...p, [key]: v };
+      saveNotificationPrefs(user.id, next);
+      api.patch('/auth/me/notification-prefs', { [key]: v }).catch(() => {});
+      return next;
+    });
+  };
+
+  if (!loaded) return null;
 
   return (
     <div className="flex flex-col">
@@ -512,7 +649,6 @@ function NotificationsTab() {
         <NotifRow label="Weekly digest" description="A summary of your top posts and analytics every Monday." checked={prefs.weeklyDigest} onChange={set('weeklyDigest')} />
         <NotifRow label="New followers milestone" description="When your follower count hits a new milestone." checked={prefs.newFollowers} onChange={set('newFollowers')} />
         <NotifRow label="AI content suggestions" description="Personalized content ideas based on your posting history." checked={prefs.aiSuggestions} onChange={set('aiSuggestions')} />
-        <NotifRow label="Team activity" description="When teammates create, edit, or delete posts." checked={prefs.teamActivity} onChange={set('teamActivity')} />
       </div>
 
       <div className="pt-6 mt-2 border-t border-gray-100">
@@ -593,7 +729,6 @@ function BillingTab() {
               'Unlimited scheduled posts',
               'Advanced analytics & exports',
               'AI caption generation (500/mo)',
-              'Team collaboration (up to 5 seats)',
               'Priority support',
             ].map(f => (
               <li key={f} className="flex items-center gap-2 text-[13px] text-gray-600">
@@ -637,376 +772,6 @@ function BillingTab() {
   );
 }
 
-// ─── Team tab ─────────────────────────────────────────────────────────────────
-
-type Role = 'owner' | 'admin' | 'editor' | 'viewer';
-
-interface Member {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  avatar: string; // initials
-  color: string;
-  joinedAt: string;
-  status: 'active' | 'pending';
-}
-
-const ROLE_CONFIG: Record<Role, { label: string; desc: string; icon: typeof Crown; color: string }> = {
-  owner:  { label: 'Owner',  desc: 'Full access including billing and brand deletion', icon: Crown,  color: 'text-amber-600 bg-amber-50 border-amber-200'   },
-  admin:  { label: 'Admin',  desc: 'All content access plus team management',          icon: Shield, color: 'text-orange-600 bg-orange-50 border-orange-200' },
-  editor: { label: 'Editor', desc: 'Create, edit, and schedule posts',                 icon: Pencil, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-  viewer: { label: 'Viewer', desc: 'Read-only access to posts and analytics',          icon: Eye,    color: 'text-gray-600 bg-gray-100 border-gray-200'      },
-};
-
-const INITIAL_MEMBERS: Member[] = [
-  { id: '1', name: 'Alex Johnson',  email: 'alex@relay.app',   role: 'owner',  avatar: 'AJ', color: 'bg-orange-500', joinedAt: 'Jan 12, 2025', status: 'active'  },
-  { id: '2', name: 'Sara Kim',      email: 'sara@acmeco.com',    role: 'admin',  avatar: 'SK', color: 'bg-orange-500', joinedAt: 'Feb 3, 2025',  status: 'active'  },
-  { id: '3', name: 'Marcus Reed',   email: 'marcus@acmeco.com',  role: 'editor', avatar: 'MR', color: 'bg-emerald-500',joinedAt: 'Mar 18, 2025', status: 'active'  },
-];
-
-const INITIAL_INVITES = [
-  { id: 'i1', email: 'jordan@acmeco.com', role: 'editor' as Role, invitedAt: '2 days ago', expiresIn: '5 days' },
-];
-
-function RoleBadge({ role }: { role: Role }) {
-  const cfg = ROLE_CONFIG[role];
-  return (
-    <span className={cn('inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border', cfg.color)}>
-      <cfg.icon size={10} strokeWidth={2.5} />
-      {cfg.label}
-    </span>
-  );
-}
-
-function MemberRow({
-  member,
-  onRoleChange,
-  onRemove,
-  isCurrentUser,
-}: {
-  member: Member;
-  onRoleChange: (id: string, role: Role) => void;
-  onRemove: (id: string) => void;
-  isCurrentUser: boolean;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [rolePickerOpen, setRolePickerOpen] = useState(false);
-
-  return (
-    <div className="flex items-center gap-3 py-3.5 border-b border-gray-100 last:border-0 group">
-      {/* Avatar */}
-      <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-white text-[13px] font-bold shrink-0', member.color)}>
-        {member.avatar}
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="text-[14px] font-medium text-gray-900 truncate">{member.name}</p>
-          {isCurrentUser && (
-            <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">You</span>
-          )}
-        </div>
-        <p className="text-[12px] text-gray-400 truncate">{member.email}</p>
-      </div>
-
-      {/* Joined */}
-      <p className="text-[12px] text-gray-400 shrink-0 hidden sm:block">{member.joinedAt}</p>
-
-      {/* Role */}
-      <div className="relative shrink-0">
-        {member.role === 'owner' || isCurrentUser ? (
-          <RoleBadge role={member.role} />
-        ) : (
-          <button
-            onClick={() => setRolePickerOpen(v => !v)}
-            className="flex items-center gap-1"
-          >
-            <RoleBadge role={member.role} />
-            <ChevronDown size={11} className="text-gray-400 -ml-0.5" />
-          </button>
-        )}
-
-        {rolePickerOpen && (
-          <div className="absolute right-0 top-full mt-1 z-30 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 overflow-hidden">
-            <p className="px-3 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Change role</p>
-            {(Object.keys(ROLE_CONFIG) as Role[]).filter(r => r !== 'owner').map(r => {
-              const cfg = ROLE_CONFIG[r];
-              return (
-                <button
-                  key={r}
-                  onClick={() => { onRoleChange(member.id, r); setRolePickerOpen(false); }}
-                  className={cn('flex items-start gap-2.5 w-full px-3 py-2 hover:bg-gray-50 transition-colors text-left', member.role === r && 'bg-gray-50')}
-                >
-                  <cfg.icon size={14} className="mt-0.5 text-gray-400 shrink-0" />
-                  <div>
-                    <p className="text-[13px] font-medium text-gray-800">{cfg.label}</p>
-                    <p className="text-[11px] text-gray-400">{cfg.desc}</p>
-                  </div>
-                  {member.role === r && <Check size={13} className="ml-auto text-orange-500 shrink-0 mt-0.5" />}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      {!isCurrentUser && member.role !== 'owner' && (
-        <div className="relative shrink-0">
-          <button
-            onClick={() => setMenuOpen(v => !v)}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-gray-300 hover:text-gray-500 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-all"
-          >
-            <MoreHorizontal size={15} />
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-full mt-1 z-30 w-36 bg-white border border-gray-200 rounded-lg shadow-lg py-1 overflow-hidden">
-              <button
-                onClick={() => { onRemove(member.id); setMenuOpen(false); }}
-                className="flex items-center gap-2 w-full px-3 py-2 text-[13px] text-red-600 hover:bg-red-50 transition-colors"
-              >
-                <Trash2 size={13} /> Remove
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TeamTab() {
-  const [members, setMembers] = useState<Member[]>(INITIAL_MEMBERS);
-  const [invites, setInvites] = useState(INITIAL_INVITES);
-  const [showInviteForm, setShowInviteForm] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<Role>('editor');
-  const [inviteSent, setInviteSent] = useState(false);
-  const [removeConfirm, setRemoveConfirm] = useState<string | null>(null);
-
-  const handleRoleChange = (id: string, role: Role) => {
-    setMembers(prev => prev.map(m => m.id === id ? { ...m, role } : m));
-  };
-
-  const handleRemove = (id: string) => {
-    if (removeConfirm === id) {
-      setMembers(prev => prev.filter(m => m.id !== id));
-      setRemoveConfirm(null);
-    } else {
-      setRemoveConfirm(id);
-    }
-  };
-
-  const handleInvite = () => {
-    if (!inviteEmail.trim()) return;
-    const newInvite = {
-      id: `i${Date.now()}`,
-      email: inviteEmail.trim(),
-      role: inviteRole,
-      invitedAt: 'just now',
-      expiresIn: '7 days',
-    };
-    setInvites(prev => [...prev, newInvite]);
-    setInviteSent(true);
-    setTimeout(() => {
-      setInviteEmail('');
-      setInviteRole('editor');
-      setInviteSent(false);
-      setShowInviteForm(false);
-    }, 1800);
-  };
-
-  const revokeInvite = (id: string) => setInvites(prev => prev.filter(i => i.id !== id));
-
-  const seatsUsed = members.length + invites.length;
-  const seatsMax = 5;
-  const isFreePlan = true;
-
-  return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[15px] font-semibold text-gray-900">Team members</p>
-          <p className="text-[13px] text-gray-400 mt-0.5">
-            {seatsUsed} of {seatsMax} seats used
-            {isFreePlan && ' · Free plan'}
-          </p>
-        </div>
-        <button
-          onClick={() => setShowInviteForm(v => !v)}
-          disabled={seatsUsed >= seatsMax}
-          className="flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          <UserPlus size={14} /> Invite member
-        </button>
-      </div>
-
-      {/* Seats bar */}
-      <div className="flex flex-col gap-1.5">
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-orange-400 rounded-full transition-all"
-            style={{ width: `${Math.min((seatsUsed / seatsMax) * 100, 100)}%` }}
-          />
-        </div>
-        <p className="text-[11px] text-gray-400">
-          {seatsMax - seatsUsed} seat{seatsMax - seatsUsed !== 1 ? 's' : ''} remaining.{' '}
-          <button className="text-orange-500 hover:text-orange-600 transition-colors">Upgrade to add more.</button>
-        </p>
-      </div>
-
-      {/* Invite form */}
-      {showInviteForm && (
-        <div className="flex flex-col gap-3 p-4 bg-orange-50 border border-orange-100 rounded-xl">
-          <p className="text-[13px] font-semibold text-orange-700">Invite a teammate</p>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 flex-1 h-[38px] px-3 bg-white border border-gray-200 rounded-lg focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/10 transition-colors">
-              <Mail size={13} className="text-gray-400 shrink-0" />
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={e => setInviteEmail(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleInvite()}
-                placeholder="teammate@company.com"
-                className="flex-1 min-w-0 bg-transparent text-[13px] text-gray-700 placeholder:text-gray-400 outline-none"
-                autoFocus
-              />
-            </div>
-
-            {/* Role select */}
-            <select
-              value={inviteRole}
-              onChange={e => setInviteRole(e.target.value as Role)}
-              className="h-[38px] pl-3 pr-8 bg-white border border-gray-200 rounded-lg text-[13px] text-gray-600 outline-none appearance-none cursor-pointer hover:bg-gray-50 transition-colors"
-              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
-            >
-              {(['admin', 'editor', 'viewer'] as Role[]).map(r => (
-                <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>
-              ))}
-            </select>
-
-            <button
-              onClick={handleInvite}
-              disabled={!inviteEmail.trim() || inviteSent}
-              className={cn(
-                'h-[38px] px-4 text-[13px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shrink-0',
-                inviteSent
-                  ? 'bg-emerald-500 text-white'
-                  : 'bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40'
-              )}
-            >
-              {inviteSent ? <><Check size={13} /> Sent!</> : 'Send invite'}
-            </button>
-
-            <button
-              onClick={() => setShowInviteForm(false)}
-              className="h-[38px] px-3 text-[13px] font-medium text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-
-          {/* Role descriptions */}
-          <div className="grid grid-cols-3 gap-2 pt-1">
-            {(['admin', 'editor', 'viewer'] as Role[]).map(r => {
-              const cfg = ROLE_CONFIG[r];
-              return (
-                <div
-                  key={r}
-                  onClick={() => setInviteRole(r)}
-                  className={cn(
-                    'flex flex-col gap-1 p-2.5 rounded-lg border cursor-pointer transition-colors',
-                    inviteRole === r ? 'bg-white border-orange-200' : 'bg-white/50 border-transparent hover:border-gray-200'
-                  )}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <cfg.icon size={12} className="text-gray-400" />
-                    <span className="text-[12px] font-semibold text-gray-700">{cfg.label}</span>
-                    {inviteRole === r && <Check size={10} className="text-orange-500 ml-auto" />}
-                  </div>
-                  <p className="text-[11px] text-gray-400 leading-snug">{cfg.desc}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Members list */}
-      <div className="bg-white border border-gray-200 rounded-xl px-4">
-        {members.map(member => (
-          <MemberRow
-            key={member.id}
-            member={member}
-            onRoleChange={handleRoleChange}
-            onRemove={handleRemove}
-            isCurrentUser={member.id === '1'}
-          />
-        ))}
-      </div>
-
-      {/* Pending invitations */}
-      {invites.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <p className="text-[13px] font-semibold text-gray-700 flex items-center gap-1.5">
-            <Clock size={13} className="text-gray-400" />
-            Pending invitations
-          </p>
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
-            {invites.map(invite => (
-              <div key={invite.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="w-9 h-9 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center shrink-0">
-                  <Mail size={13} className="text-gray-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-gray-700 truncate">{invite.email}</p>
-                  <p className="text-[12px] text-gray-400">
-                    Invited {invite.invitedAt} · expires in {invite.expiresIn}
-                  </p>
-                </div>
-                <RoleBadge role={invite.role} />
-                <div className="flex items-center gap-2 shrink-0">
-                  <button className="text-[12px] font-medium text-orange-500 hover:text-orange-600 transition-colors">
-                    Resend
-                  </button>
-                  <button
-                    onClick={() => revokeInvite(invite.id)}
-                    className="text-[12px] font-medium text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    Revoke
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Role legend */}
-      <div className="flex flex-col gap-3 p-4 bg-gray-50 border border-gray-200 rounded-xl">
-        <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wider">Role permissions</p>
-        <div className="grid grid-cols-2 gap-2">
-          {(Object.keys(ROLE_CONFIG) as Role[]).map(r => {
-            const cfg = ROLE_CONFIG[r];
-            return (
-              <div key={r} className="flex items-start gap-2">
-                <cfg.icon size={13} className="text-gray-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[12px] font-semibold text-gray-700">{cfg.label}</p>
-                  <p className="text-[11px] text-gray-400">{cfg.desc}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Settings view ────────────────────────────────────────────────────────────
 
 const TABS: { key: Tab; label: string; icon: typeof User }[] = [
@@ -1014,7 +779,6 @@ const TABS: { key: Tab; label: string; icon: typeof User }[] = [
   { key: 'brand',         label: 'Brand',         icon: Building2   },
   { key: 'notifications', label: 'Notifications', icon: Bell        },
   { key: 'billing',       label: 'Billing',       icon: CreditCard  },
-  { key: 'team',          label: 'Team',          icon: Users       },
 ];
 
 export function SettingsView() {
@@ -1047,7 +811,6 @@ export function SettingsView() {
         {tab === 'brand'         && <BrandTab />}
         {tab === 'notifications' && <NotificationsTab />}
         {tab === 'billing'       && <BillingTab />}
-        {tab === 'team'          && <TeamTab />}
       </div>
     </div>
   );

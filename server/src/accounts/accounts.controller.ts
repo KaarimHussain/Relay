@@ -6,6 +6,11 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { BrandMemberGuard } from '../common/guards/brand-member.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { MemberRole } from '@prisma/client';
+import { IsString } from 'class-validator';
+
+class ConnectLinkedInPageDto {
+  @IsString() pageIdentifier: string;
+}
 
 @ApiTags('Accounts')
 @ApiBearerAuth()
@@ -32,5 +37,11 @@ export class AccountsController {
   @Get(':accountId/health')
   health(@Param('brandId') brandId: string, @Param('accountId') accountId: string) {
     return this.accounts.healthCheck(brandId, accountId);
+  }
+
+  @Post('linkedin-page')
+  @Roles(MemberRole.Admin, MemberRole.Owner)
+  connectLinkedInPage(@Param('brandId') brandId: string, @Body() dto: ConnectLinkedInPageDto) {
+    return this.accounts.connectLinkedInPage(brandId, dto.pageIdentifier);
   }
 }

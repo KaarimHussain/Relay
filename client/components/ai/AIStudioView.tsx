@@ -1,15 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Sparkles, Copy, Check, Plus, X,
   PenLine, Lightbulb, Hash, Send,
-  RefreshCw, AlertCircle,
+  RefreshCw, AlertCircle, Bookmark, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
 import { useBrandStore } from '@/store/brand';
+import { useTemplateStore } from '@/store/template';
+import { PlatformBadge } from '@/components/ui/platform-icons';
 import { api, ApiError } from '@/lib/api';
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -30,6 +32,52 @@ function CopyButton({ text, size = 'sm' }: { text: string; size?: 'sm' | 'xs' })
         size === 'sm' ? 'h-6.5 px-2 text-xs' : 'h-5.5 px-1.5 text-[11px]')}>
       {copied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} />}
       {copied ? 'Copied' : 'Copy'}
+    </button>
+  );
+}
+
+interface SavePayload {
+  brandId: string;
+  name: string;
+  category: string;
+  platforms: string[];
+  caption: string;
+}
+
+function SaveButton({ payload, size = 'sm' }: { payload: SavePayload; size?: 'sm' | 'xs' }) {
+  const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const { toast } = useToast();
+  const createTemplate = useTemplateStore((s) => s.createTemplate);
+
+  const save = async () => {
+    if (state !== 'idle') return;
+    setState('saving');
+    try {
+      await createTemplate(payload.brandId, {
+        name: payload.name,
+        category: payload.category,
+        platforms: payload.platforms,
+        caption: payload.caption,
+      });
+      setState('saved');
+      toast('Saved to Templates!', 'success');
+      setTimeout(() => setState('idle'), 2500);
+    } catch (e) {
+      setState('idle');
+      toast(e instanceof ApiError ? e.message : 'Failed to save', 'error');
+    }
+  };
+
+  return (
+    <button onClick={save} disabled={state !== 'idle'}
+      className={cn('btn-clay-secondary gap-1 shrink-0 font-semibold transition-colors',
+        state === 'saved' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'text-gray-600',
+        size === 'sm' ? 'h-6.5 px-2 text-xs' : 'h-5.5 px-1.5 text-[11px]')}>
+      {state === 'saved'
+        ? <><Check size={11} strokeWidth={2.5} /> Saved</>
+        : state === 'saving'
+        ? <><RefreshCw size={11} className="animate-spin" /> Saving…</>
+        : <><Bookmark size={11} /> Save</>}
     </button>
   );
 }
@@ -200,7 +248,17 @@ function CaptionWriter() {
                     <span className="text-[11px] font-medium text-gray-400">{variation.caption.length} chars</span>
                     <div className="flex items-center gap-1.5">
                       <CopyButton text={fullText} />
-                      <Link href="/posts/new"
+                      {activeBrand && (
+                        <SaveButton size="sm" payload={{
+                          brandId: activeBrand.id,
+                          name: `AI Caption – ${PLATFORM_LABELS[platform]} – ${tone}`,
+                          category: tone === 'Promotional' ? 'Promotional' : tone === 'Inspirational' ? 'Inspirational' : 'Educational',
+                          platforms: [platform.toLowerCase()],
+                          caption: fullText,
+                        }} />
+                      )}
+                      <Link
+                        href={`/posts/new?caption=${encodeURIComponent(fullText)}&platform=${platform.toLowerCase()}`}
                         className="btn-clay-primary h-6.5 px-2.5 text-xs gap-1 font-semibold inline-flex items-center">
                         <Send size={11} /> Use in post
                       </Link>
@@ -216,22 +274,20 @@ function CaptionWriter() {
   );
 }
 
-// ─── Content Ideas (mocked — no backend endpoint yet) ─────────────────────────
+// ─── Content Ideas ────────────────────────────────────────────────────────────
 
-const IDEAS_MOCK = [
-  { theme: 'Educational',   platform: 'LinkedIn',  hook: 'Most brands get this wrong…',         title: '5 counterintuitive social media rules that actually drive growth',           cta: 'Share your experience in the comments' },
-  { theme: 'Behind-scenes', platform: 'Instagram', hook: "We almost didn't post this…",          title: 'The messy reality of running a content team (honest version)',                 cta: "Save this for when you're having a tough week" },
-  { theme: 'Promotional',   platform: 'X',         hook: 'Something big just dropped ⚡',         title: 'Introducing the feature our community has been asking for all year',           cta: 'Check the link in bio' },
-  { theme: 'Storytelling',  platform: 'Facebook',  hook: 'Six months ago we almost gave up…',    title: "Here's what changed everything for our content team",                          cta: 'Tell us your story in the comments' },
-];
+interface ContentIdea { theme: string; platform: string; hook: string; title: string; cta: string }
 
 function ContentIdeas() {
+  const { toast } = useToast();
+  const activeBrand = useBrandStore((s) => s.activeBrand());
+
   const [niche, setNiche] = useState('');
   const [pillars, setPillars] = useState<string[]>(['Education', 'Behind the scenes']);
   const [pillarInput, setPillarInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<typeof IDEAS_MOCK>([]);
-  const { toast } = useToast();
+  const [results, setResults] = useState<ContentIdea[]>([]);
+  const [error, setError] = useState('');
 
   const addPillar = () => {
     const v = pillarInput.trim();
@@ -240,12 +296,21 @@ function ContentIdeas() {
   };
 
   const generate = async () => {
-    if (!niche.trim()) return;
+    if (!niche.trim() || !activeBrand) return;
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
-    setResults(IDEAS_MOCK);
-    setLoading(false);
-    toast('Content ideas generated!', 'sparkle');
+    setError('');
+    try {
+      const resp = await api.post<{ ideas: ContentIdea[] }>(
+        `/brands/${activeBrand.id}/ai/generate-ideas`,
+        { niche: niche.trim(), pillars },
+      );
+      setResults(resp.ideas);
+      toast('Content ideas generated!', 'sparkle');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to generate ideas. Check your API key.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -280,53 +345,102 @@ function ContentIdeas() {
         </div>
 
         <div className="flex justify-end pt-2 border-t border-gray-100">
-          <GenerateButton loading={loading} onClick={generate} disabled={!niche.trim()} label="Generate Ideas" />
+          <GenerateButton loading={loading} onClick={generate} disabled={!niche.trim() || !activeBrand} label="Generate Ideas" />
         </div>
       </div>
 
+      {error && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl">
+          <AlertCircle size={13} className="text-red-500 shrink-0" />
+          <p className="text-xs font-medium text-red-700">{error}</p>
+        </div>
+      )}
+
       {results.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {results.map((idea, i) => (
-            <div key={i} className="bg-white border border-gray-200 rounded-xl p-3.5 flex flex-col justify-between gap-2.5 shadow-2xs">
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">{idea.theme}</span>
-                  <span className="text-[11px] font-medium text-gray-400">{idea.platform}</span>
+        <div className="flex flex-col gap-3 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+              <Sparkles size={13} className="text-orange-600" />
+              Generated Ideas ({results.length} ideas for <span className="italic">{niche}</span>)
+            </p>
+            <button onClick={generate} disabled={loading} className="btn-clay-secondary h-7 px-2.5 text-xs gap-1">
+              <RefreshCw size={12} /> Regenerate
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {results.map((idea, i) => {
+              const ideaCaption = `${idea.hook}\n\n${idea.title}\n\nCTA: ${idea.cta}`;
+              const ideaPlatform = idea.platform.toLowerCase().replace(/\s+/g, '');
+              const VALID_PLATFORMS = ['instagram', 'x', 'linkedin', 'facebook', 'tiktok'];
+              const platform = VALID_PLATFORMS.includes(ideaPlatform) ? ideaPlatform : 'instagram';
+              const THEME_TO_CATEGORY: Record<string, string> = {
+                educational: 'Educational', promotional: 'Promotional', engagement: 'Engagement',
+                inspirational: 'Inspirational', announcement: 'Announcement',
+                'behind-the-scenes': 'Behind-the-scenes', storytelling: 'Educational',
+              };
+              const category = THEME_TO_CATEGORY[idea.theme.toLowerCase()] ?? 'Educational';
+              return (
+                <div key={i} className="bg-white border border-gray-200 rounded-xl p-3.5 flex flex-col justify-between gap-2.5 shadow-2xs">
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">{idea.theme}</span>
+                      <span className="text-[11px] font-medium text-gray-400">{idea.platform}</span>
+                    </div>
+                    <p className="text-xs font-semibold text-gray-900 leading-snug">{idea.title}</p>
+                    <p className="text-[11px] text-gray-500 italic leading-snug">&ldquo;{idea.hook}&rdquo;</p>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <span className="text-[10px] text-gray-400 truncate mr-2">CTA: {idea.cta}</span>
+                    <div className="flex items-center gap-1.5">
+                      <CopyButton text={ideaCaption} size="xs" />
+                      {activeBrand && (
+                        <SaveButton size="xs" payload={{
+                          brandId: activeBrand.id,
+                          name: idea.title.length > 60 ? idea.title.slice(0, 57) + '…' : idea.title,
+                          category,
+                          platforms: [platform],
+                          caption: ideaCaption,
+                        }} />
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <p className="text-xs font-bold text-gray-900 leading-snug">{idea.title}</p>
-              </div>
-              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                <span className="text-[10px] text-gray-500 truncate mr-2">CTA: {idea.cta}</span>
-                <CopyButton text={`${idea.hook}\n\n${idea.title}`} size="xs" />
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ─── Hashtag Finder (mocked — no backend endpoint yet) ────────────────────────
-
-const HASHTAG_MOCK = {
-  popular: ['#socialmedia', '#marketing', '#digitalmarketing', '#contentcreator', '#brandstrategy'],
-  niche:   ['#SMManager', '#schedulePost', '#contentCalendar', '#SMMtools', '#socialROI'],
-};
+// ─── Hashtag Finder ───────────────────────────────────────────────────────────
 
 function HashtagFinder() {
+  const { toast } = useToast();
+  const activeBrand = useBrandStore((s) => s.activeBrand());
+
   const [topic, setTopic] = useState('');
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<typeof HASHTAG_MOCK | null>(null);
-  const { toast } = useToast();
+  const [results, setResults] = useState<{ popular: string[]; niche: string[] } | null>(null);
+  const [error, setError] = useState('');
 
   const generate = async () => {
-    if (!topic.trim()) return;
+    if (!topic.trim() || !activeBrand) return;
     setLoading(true);
-    await new Promise(r => setTimeout(r, 900));
-    setResults(HASHTAG_MOCK);
-    setLoading(false);
-    toast('Hashtags found!', 'sparkle');
+    setError('');
+    try {
+      const resp = await api.post<{ popular: string[]; niche: string[] }>(
+        `/brands/${activeBrand.id}/ai/generate-hashtags`,
+        { topic: topic.trim() },
+      );
+      setResults(resp);
+      toast('Hashtags found!', 'sparkle');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to generate hashtags. Check your API key.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -339,46 +453,181 @@ function HashtagFinder() {
             placeholder="e.g. Social media automation"
             className="h-8.5 bg-gray-50 border border-gray-200 rounded-lg text-xs px-3 font-medium outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/10" />
         </div>
-        <GenerateButton loading={loading} onClick={generate} disabled={!topic.trim()} label="Find Hashtags" />
+        <GenerateButton loading={loading} onClick={generate} disabled={!topic.trim() || !activeBrand} label="Find Hashtags" />
       </div>
 
+      {error && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl">
+          <AlertCircle size={13} className="text-red-500 shrink-0" />
+          <p className="text-xs font-medium text-red-700">{error}</p>
+        </div>
+      )}
+
       {results && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {Object.entries(results).map(([category, tags]) => (
-            <div key={category} className="bg-white border border-gray-200 rounded-xl p-3.5 flex flex-col gap-2.5 shadow-2xs">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-800 capitalize">{category} Hashtags</span>
-                <CopyButton text={tags.join(' ')} size="xs" />
+        <div className="flex flex-col gap-3 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+              <Sparkles size={13} className="text-orange-600" />
+              Hashtags for &ldquo;{topic}&rdquo;
+            </p>
+            <button onClick={generate} disabled={loading} className="btn-clay-secondary h-7 px-2.5 text-xs gap-1">
+              <RefreshCw size={12} /> Regenerate
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(Object.entries(results) as [string, string[]][]).map(([category, tags]) => (
+              <div key={category} className="bg-white border border-gray-200 rounded-xl p-3.5 flex flex-col gap-2.5 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-bold text-gray-800 capitalize">{category} Hashtags</span>
+                    <span className="text-[11px] text-gray-400">{tags.length} tags</span>
+                  </div>
+                  <CopyButton text={tags.join(' ')} size="xs" />
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {tags.map(t => (
+                    <button
+                      key={t}
+                      onClick={() => { navigator.clipboard.writeText(t); toast(`Copied ${t}`, 'success'); }}
+                      className="bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded text-xs font-medium hover:bg-orange-100 transition-colors">
+                      {t.startsWith('#') ? t : `#${t}`}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map(t => (
-                  <span key={t} className="bg-orange-50 text-orange-700 px-2 py-0.5 rounded text-xs font-medium">{t}</span>
-                ))}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
+// ─── Saved Results ────────────────────────────────────────────────────────────
+
+const PLATFORM_LABEL: Record<string, string> = {
+  instagram: 'Instagram', x: 'X', linkedin: 'LinkedIn', facebook: 'Facebook', tiktok: 'TikTok',
+};
+
+function SavedResults() {
+  const activeBrand = useBrandStore((s) => s.activeBrand());
+  const { templates, status, fetchTemplates, deleteTemplate } = useTemplateStore();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (activeBrand?.id) fetchTemplates(activeBrand.id);
+  }, [activeBrand?.id, fetchTemplates]);
+
+  const handleDelete = async (id: string) => {
+    if (!activeBrand) return;
+    try {
+      await deleteTemplate(activeBrand.id, id);
+      toast('Removed from saved', 'info');
+    } catch {
+      toast('Failed to remove', 'error');
+    }
+  };
+
+  if (!activeBrand) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <AlertCircle size={20} className="text-gray-300 mb-3" />
+        <p className="text-sm font-medium text-gray-500">No brand selected</p>
+      </div>
+    );
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center py-16 gap-2 text-gray-400">
+        <RefreshCw size={14} className="animate-spin" />
+        <span className="text-xs">Loading saved results…</span>
+      </div>
+    );
+  }
+
+  if (templates.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mb-4">
+          <Bookmark size={20} className="text-gray-400" />
+        </div>
+        <p className="text-[15px] font-semibold text-gray-700 mb-1">Nothing saved yet</p>
+        <p className="text-[13px] text-gray-400 max-w-xs">
+          Click the <span className="inline-flex items-center gap-0.5 font-semibold text-gray-600"><Bookmark size={11} /> Save</span> button on any generated caption or idea to save it here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold text-gray-700">{templates.length} saved result{templates.length !== 1 ? 's' : ''}</p>
+        <Link href="/templates" className="text-[11px] font-semibold text-orange-600 hover:underline">
+          View all in Templates →
+        </Link>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {templates.map((t) => (
+          <div key={t.id} className="bg-white border border-gray-200 rounded-xl p-3.5 flex flex-col gap-2.5 shadow-2xs hover:border-gray-300 transition-colors group">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex flex-col gap-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded">
+                    {t.category}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {t.platforms.map((p) => (
+                      <div key={p} title={PLATFORM_LABEL[p] ?? p} className="ring-1 ring-gray-100 rounded-full">
+                        <PlatformBadge platform={p} size="sm" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[13px] font-semibold text-gray-900 truncate">{t.name}</p>
+              </div>
+              <button
+                onClick={() => handleDelete(t.id)}
+                className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all shrink-0">
+                <Trash2 size={12} />
+              </button>
+            </div>
+            <p className="text-[12px] text-gray-500 leading-relaxed line-clamp-3">{t.caption}</p>
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+              <CopyButton text={t.caption} size="xs" />
+              <Link
+                href={`/posts/new?caption=${encodeURIComponent(t.caption)}&platform=${t.platforms[0] ?? ''}`}
+                className="btn-clay-primary h-5.5 px-1.5 text-[11px] gap-1 font-semibold inline-flex items-center">
+                <Send size={10} /> Use in post
+              </Link>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── AI Studio main ───────────────────────────────────────────────────────────
 
-type Tool = 'caption' | 'ideas' | 'hashtags';
+type Tool = 'caption' | 'ideas' | 'hashtags' | 'saved';
 
 const TOOLS: { key: Tool; label: string; icon: typeof PenLine; desc: string }[] = [
   { key: 'caption',  label: 'AI Caption Writer', icon: PenLine,   desc: 'Generate converting captions via AI' },
   { key: 'ideas',    label: 'Content Ideas',      icon: Lightbulb, desc: 'Generate post concepts'             },
   { key: 'hashtags', label: 'Hashtag Finder',     icon: Hash,      desc: 'Find niche hashtags'                },
+  { key: 'saved',    label: 'Saved Results',       icon: Bookmark,  desc: 'View your saved captions & ideas'  },
 ];
 
 export function AIStudioView() {
   const [tool, setTool] = useState<Tool>('caption');
+  const savedCount = useTemplateStore((s) => s.templates.length);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {TOOLS.map(({ key, label, icon: Icon, desc }) => {
           const isActive = tool === key;
           return (
@@ -396,6 +645,9 @@ export function AIStudioView() {
               {key === 'caption' && (
                 <span className="text-[9px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded shrink-0">LIVE AI</span>
               )}
+              {key === 'saved' && savedCount > 0 && (
+                <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{savedCount}</span>
+              )}
             </button>
           );
         })}
@@ -404,6 +656,7 @@ export function AIStudioView() {
       {tool === 'caption'  && <CaptionWriter />}
       {tool === 'ideas'    && <ContentIdeas />}
       {tool === 'hashtags' && <HashtagFinder />}
+      {tool === 'saved'    && <SavedResults />}
     </div>
   );
 }

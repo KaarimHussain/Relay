@@ -21,6 +21,8 @@ interface AuthState {
   hydrate: () => Promise<void>;
   updateProfile: (data: { name?: string; email?: string; bio?: string; avatarUrl?: string }) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
 }
 
 function persistToken(token: string) {
@@ -77,6 +79,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   changePassword: async (currentPassword, newPassword) => {
     await api.post('/auth/me/change-password', { currentPassword, newPassword });
+  },
+
+  uploadAvatar: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const updated = await api.upload<AuthUser>('/auth/me/avatar', formData);
+    set({ user: updated });
+  },
+
+  deleteAccount: async (password) => {
+    await api.delete('/auth/me', { password });
+    clearToken();
+    import('@/store/brand').then(({ useBrandStore }) => useBrandStore.getState().reset());
+    import('@/store/account').then(({ useAccountStore }) => useAccountStore.getState().reset());
+    import('@/store/post').then(({ usePostStore }) => usePostStore.getState().reset());
+    set({ user: null, token: null, status: 'unauthenticated' });
   },
 
   hydrate: async () => {

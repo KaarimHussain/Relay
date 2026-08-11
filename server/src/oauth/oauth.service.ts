@@ -11,28 +11,43 @@ interface OAuthState {
   expiresAt: number;
 }
 
+interface LinkedInPending {
+  userId: string;
+  brandId: string;
+  accessToken: string;
+  tokenExpiresAt: Date;
+  person: { id: string; name: string };
+  orgs: Array<{ id: string; name: string }>;
+  expiresAt: number;
+}
+
 @Injectable()
 export class OAuthService {
   // In-memory state store — fine for single-instance; replace with Redis for multi-instance
   private readonly states = new Map<string, OAuthState>();
+  private readonly linkedinPending = new Map<string, LinkedInPending>();
 
   constructor(
     private config: ConfigService,
     private accounts: AccountsService,
   ) {
-    // Clean up expired states every 5 min
+    // Clean up expired entries every 5 min
     setInterval(() => {
       const now = Date.now();
       for (const [k, v] of this.states) {
         if (v.expiresAt < now) this.states.delete(k);
+      }
+      for (const [k, v] of this.linkedinPending) {
+        if (v.expiresAt < now) this.linkedinPending.delete(k);
       }
     }, 5 * 60 * 1000);
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
-  private serverUrl()   { return this.config.get('SERVER_URL',   'http://localhost:3001'); }
-  private frontendUrl() { return this.config.get('FRONTEND_URL', 'http://localhost:3000'); }
+  private serverUrl()      { return this.config.get('SERVER_URL',   'http://localhost:3001'); }
+  getFrontendUrl()         { return this.config.get('FRONTEND_URL', 'http://localhost:3000'); }
+  private frontendUrl()    { return this.getFrontendUrl(); }
   private callbackUrl(platform: string) {
     return `${this.serverUrl()}/api/v1/oauth/callback/${platform.toLowerCase()}`;
   }
@@ -94,7 +109,7 @@ export class OAuthService {
       response_type: 'code',
       client_id:     this.config.getOrThrow('LINKEDIN_CLIENT_ID'),
       redirect_uri:  this.callbackUrl('linkedin'),
-      scope:         'openid profile w_member_social r_organization_social',
+      scope:         'openid profile w_member_social r_organization_social w_organization_social',
       state,
     });
     return `https://www.linkedin.com/oauth/v2/authorization?${params}`;
@@ -141,9 +156,13 @@ export class OAuthService {
         case 'facebook':
           await this.handleFacebookCallback(code, userId, brandId, stateData.platform);
           break;
-        case 'linkedin':
-          await this.handleLinkedInCallback(code, userId, brandId);
+        case 'linkedin': {
+          const tempId = await this.handleLinkedInCallback(code, userId, brandId);
+          if (tempId !== null) {
+            return `${this.frontendUrl()}/accounts?linkedin_pending=${tempId}`;
+          }
           break;
+        }
         case 'x':
           await this.handleXCallback(code, stateData.codeVerifier!, userId, brandId);
           break;
@@ -246,7 +265,7 @@ export class OAuthService {
 
   // ─── LinkedIn ──────────────────────────────────────────────────────────────
 
-  private async handleLinkedInCallback(code: string, userId: string, brandId: string) {
+  private async handleLinkedInCallback(code: string, userId: string, brandId: string): Promise<string | null> {
     const tokenRes = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -262,21 +281,130 @@ export class OAuthService {
     if (tokenData.error) throw new Error(tokenData.error_description ?? tokenData.error);
 
     const accessToken: string = tokenData.access_token;
-    const expiresIn: number   = tokenData.expires_in ?? 5183999; // ~60 days default
+    const expiresIn: number   = tokenData.expires_in ?? 5183999;
 
-    // Get profile via OpenID userinfo
+    // LinkedIn v2 REST API requires these headers on every call
+    const liHeaders = {
+      Authorization:                `Bearer ${accessToken}`,
+      'LinkedIn-Version':           '202408',
+      'X-Restli-Protocol-Version':  '2.0.0',
+    };
+
+    // Get personal profile via OpenID userinfo (doesn't need version headers)
     const profileRes = await fetch('https://api.linkedin.com/v2/userinfo', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const profile = await profileRes.json() as any;
+    const personName: string = profile.name ?? profile.email ?? profile.sub;
 
-    await this.accounts.connect(brandId, {
-      platform:        'LinkedIn',
-      platformUserId:  profile.sub,
-      platformHandle:  profile.name ?? profile.email ?? profile.sub,
+    // Fetch organization pages this user can administer.
+    // Requires Community Management API product on the LinkedIn app.
+    const orgs: Array<{ id: string; name: string }> = [];
+    try {
+      const aclUrl =
+        'https://api.linkedin.com/v2/organizationAcls' +
+        '?q=roleAssignee' +
+        '&count=10';
+      const aclRes = await fetch(aclUrl, { headers: liHeaders });
+
+      if (aclRes.ok) {
+        const aclData = await aclRes.json() as any;
+        console.log('[LinkedIn ACL]', JSON.stringify(aclData).slice(0, 500));
+        const elements: any[] = aclData.elements ?? [];
+
+        for (const el of elements) {
+          const urn: string = el.organization ?? '';
+          const orgId = urn.split(':').pop();
+          if (!orgId) continue;
+
+          // Try to fetch the org display name
+          try {
+            const orgRes = await fetch(
+              `https://api.linkedin.com/v2/organizations/${orgId}?fields=localizedName`,
+              { headers: liHeaders },
+            );
+            const orgData = orgRes.ok ? await orgRes.json() as any : {};
+            orgs.push({ id: orgId, name: orgData.localizedName ?? orgId });
+          } catch {
+            orgs.push({ id: orgId, name: orgId });
+          }
+        }
+      } else {
+        const errText = await aclRes.text().catch(() => '');
+        console.warn('[LinkedIn ACL] non-ok status:', aclRes.status, errText);
+      }
+    } catch {
+      // Network or parse error — skip company pages, personal only
+    }
+
+    // No company pages — save personal profile immediately and return to normal flow
+    if (orgs.length === 0) {
+      await this.accounts.connect(brandId, {
+        platform:       'LinkedIn',
+        platformUserId: profile.sub,
+        platformHandle: personName,
+        accessToken,
+        tokenExpiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+      });
+      return null;
+    }
+
+    // Company pages found — store for picker and return tempId
+    const tempId = crypto.randomBytes(20).toString('hex');
+    this.linkedinPending.set(tempId, {
+      userId,
+      brandId,
       accessToken,
-      tokenExpiresAt:  new Date(Date.now() + expiresIn * 1000).toISOString(),
+      tokenExpiresAt: new Date(Date.now() + expiresIn * 1000),
+      person: { id: profile.sub, name: personName },
+      orgs,
+      expiresAt: Date.now() + 10 * 60 * 1000,
     });
+    return tempId;
+  }
+
+  // ─── LinkedIn pending selection ────────────────────────────────────────────
+
+  getLinkedInPending(tempId: string) {
+    const pending = this.linkedinPending.get(tempId);
+    if (!pending || pending.expiresAt < Date.now()) {
+      this.linkedinPending.delete(tempId);
+      throw new BadRequestException('Selection expired — please reconnect LinkedIn');
+    }
+    return { person: pending.person, orgs: pending.orgs };
+  }
+
+  async finalizeLinkedIn(tempId: string, selections: string[]) {
+    const pending = this.linkedinPending.get(tempId);
+    if (!pending || pending.expiresAt < Date.now()) {
+      this.linkedinPending.delete(tempId);
+      throw new BadRequestException('Selection expired — please reconnect LinkedIn');
+    }
+    this.linkedinPending.delete(tempId);
+
+    const { brandId, accessToken, tokenExpiresAt, person, orgs } = pending;
+
+    for (const sel of selections) {
+      if (sel === 'person') {
+        await this.accounts.connect(brandId, {
+          platform:       'LinkedIn',
+          platformUserId: person.id,
+          platformHandle: person.name,
+          accessToken,
+          tokenExpiresAt: tokenExpiresAt.toISOString(),
+        });
+      } else {
+        const org = orgs.find((o) => o.id === sel);
+        if (!org) continue;
+        await this.accounts.connect(brandId, {
+          platform:       'LinkedIn',
+          platformUserId: `org:${org.id}`,
+          platformHandle: org.name,
+          accessToken,
+          tokenExpiresAt: tokenExpiresAt.toISOString(),
+        });
+      }
+    }
   }
 
   // ─── X (Twitter) ──────────────────────────────────────────────────────────

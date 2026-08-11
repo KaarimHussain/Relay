@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Sparkles, Send, Clock, FileText,
+  ImageIcon, Film, Plus, X as XIcon,
   Check, Heart, MessageCircle, Share2, Repeat2, Bookmark,
-  RefreshCw, AlertCircle, Loader2, Save,
+  RefreshCw, AlertCircle, Loader2, Save, FolderOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PlatformBadge } from '@/components/ui/platform-icons';
@@ -14,7 +15,9 @@ import { useToast } from '@/components/ui/toast';
 import { useBrandStore } from '@/store/brand';
 import { useAccountStore } from '@/store/account';
 import { usePostStore, Post } from '@/store/post';
-import { ApiError } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const PLATFORM_META: Record<string, { label: string; limit: number }> = {
   Instagram: { label: 'Instagram', limit: 2200  },
@@ -28,38 +31,62 @@ const PLATFORM_BADGE_ID: Record<string, string> = {
   Instagram: 'instagram', LinkedIn: 'linkedin', X: 'x', Facebook: 'facebook', TikTok: 'tiktok',
 };
 
+const PLATFORM_MEDIA_RULES: Record<string, {
+  maxImages: number; maxVideos: number;
+  imageSizeMB: number; videoSizeMB: number;
+  imageTypes: string[]; videoTypes: string[];
+  note: string;
+}> = {
+  Instagram: { maxImages: 10, maxVideos: 1, imageSizeMB: 8,    videoSizeMB: 100,   imageTypes: ['image/jpeg','image/png','image/webp'],             videoTypes: ['video/mp4','video/quicktime'], note: '10 imgs or 1 video' },
+  X:         { maxImages: 4,  maxVideos: 1, imageSizeMB: 5,    videoSizeMB: 512,   imageTypes: ['image/jpeg','image/png','image/gif','image/webp'], videoTypes: ['video/mp4','video/quicktime'], note: '4 imgs or 1 video'  },
+  LinkedIn:  { maxImages: 20, maxVideos: 1, imageSizeMB: 5,    videoSizeMB: 5120,  imageTypes: ['image/jpeg','image/png','image/gif'],              videoTypes: ['video/mp4'],                  note: '20 imgs or 1 video' },
+  Facebook:  { maxImages: 10, maxVideos: 1, imageSizeMB: 10,   videoSizeMB: 10240, imageTypes: ['image/jpeg','image/png','image/gif'],              videoTypes: ['video/mp4','video/quicktime'], note: '10 imgs or 1 video' },
+  TikTok:    { maxImages: 0,  maxVideos: 1, imageSizeMB: 0,    videoSizeMB: 4096,  imageTypes: [],                                                 videoTypes: ['video/mp4','video/quicktime'], note: 'Video only'         },
+};
+
+interface MediaItem {
+  id: string;
+  url: string;
+  mimeType: string;
+  name: string;
+  size: number;
+}
+
 type PostMode = 'now' | 'schedule' | 'draft';
 
 const AI_QUICK_ACTIONS = [
-  { label: '✨ Auto-Fix Tone',     prompt: 'improve-tone'   },
-  { label: '🔥 Add Viral Hook',    prompt: 'add-hook'       },
-  { label: '🏷️ Generate Hashtags', prompt: 'add-hashtags'   },
-  { label: '📏 Shorten for X',     prompt: 'shorten-for-x'  },
+  { label: '✨ Auto-Fix Tone',     prompt: 'improve-tone'  },
+  { label: '🔥 Add Viral Hook',    prompt: 'add-hook'      },
+  { label: '🏷️ Generate Hashtags', prompt: 'add-hashtags'  },
+  { label: '📏 Shorten for X',     prompt: 'shorten-for-x' },
 ];
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
 function modeFromPost(post: Post): PostMode {
   if (post.status === 'Scheduled' && post.scheduledAt) return 'schedule';
   return 'draft';
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export function EditPostView({ postId }: { postId: string }) {
   const router = useRouter();
   const { toast } = useToast();
   const activeBrand = useBrandStore((s) => s.activeBrand());
   const allAccounts = useAccountStore((s) => s.accounts);
+  const fetchAccounts = useAccountStore((s) => s.fetchAccounts);
   const accounts = allAccounts.filter((a) => a.status === 'Active');
   const { posts, fetchPosts, updatePost, schedulePost, publishNow, cancelPost } = usePostStore();
 
   const post = posts.find((p) => p.id === postId) ?? null;
 
-  // Fetch posts if not yet loaded
   useEffect(() => {
-    if (activeBrand && posts.length === 0) {
-      fetchPosts(activeBrand.id);
-    }
+    if (!activeBrand) return;
+    if (posts.length === 0) fetchPosts(activeBrand.id);
+    fetchAccounts(activeBrand.id);
   }, [activeBrand?.id]);
 
-  // Derived initial values from existing post
   const initialCaption = post?.targets[0]?.caption ?? '';
   const initialAccountIds = new Set(post?.targets.map((t) => t.accountId) ?? []);
   const initialMode = post ? modeFromPost(post) : 'draft';
@@ -67,6 +94,7 @@ export function EditPostView({ postId }: { postId: string }) {
     ? new Date(post.scheduledAt).toISOString().slice(0, 16)
     : (() => { const d = new Date(Date.now() + 3600000); return d.toISOString().slice(0, 16); })();
 
+  // ─── Post state ───────────────────────────────────────────────────────────────
   const [title, setTitle] = useState(post?.title ?? '');
   const [caption, setCaption] = useState(initialCaption);
   const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(initialAccountIds);
@@ -77,6 +105,18 @@ export function EditPostView({ postId }: { postId: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  // ─── Media state ──────────────────────────────────────────────────────────────
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaError, setMediaError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ─── Library picker state ─────────────────────────────────────────────────────
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryItems, setLibraryItems] = useState<MediaItem[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [librarySelected, setLibrarySelected] = useState<Set<string>>(new Set());
+
   // Sync state when post loads from store
   useEffect(() => {
     if (!post) return;
@@ -85,7 +125,87 @@ export function EditPostView({ postId }: { postId: string }) {
     setSelectedAccountIds(new Set(post.targets.map((t) => t.accountId)));
     setMode(modeFromPost(post));
     if (post.scheduledAt) setScheduleDate(new Date(post.scheduledAt).toISOString().slice(0, 16));
+    // Load existing media
+    if (post.media?.length) {
+      setMediaItems(post.media.map(m => ({
+        id: m.id,
+        url: m.url,
+        mimeType: m.mimeType,
+        name: m.filename,
+        size: 0,
+      })));
+    }
   }, [post?.id]);
+
+  // ─── Derived ──────────────────────────────────────────────────────────────────
+  const selectedAccounts = accounts.filter((a) => selectedAccountIds.has(a.id));
+  const previewPlatform = activePreview || selectedAccounts[0]?.platform || 'Instagram';
+
+  const mediaImages = mediaItems.filter(m => m.mimeType.startsWith('image/'));
+  const mediaVideos = mediaItems.filter(m => m.mimeType.startsWith('video/'));
+  const hasVideo = mediaVideos.length > 0;
+  const hasImages = mediaImages.length > 0;
+
+  const effectiveMaxImages = useMemo(() => {
+    if (!selectedAccounts.length) return 20;
+    return Math.min(...selectedAccounts.map(a => PLATFORM_MEDIA_RULES[a.platform]?.maxImages ?? 20));
+  }, [selectedAccounts]);
+
+  const canAddMore = !hasVideo && mediaImages.length < effectiveMaxImages;
+
+  const fileInputAccept = useMemo(() => {
+    const platforms = selectedAccounts.map(a => a.platform);
+    if (platforms.length === 1 && platforms[0] === 'TikTok') return 'video/mp4,video/quicktime';
+    if (hasVideo) return 'video/mp4,video/quicktime';
+    if (hasImages) return 'image/jpeg,image/png,image/gif,image/webp';
+    return 'image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime';
+  }, [selectedAccounts, hasVideo, hasImages]);
+
+  const mediaWarnings = useMemo(() => {
+    if (!mediaItems.length || !selectedAccounts.length) return [];
+    const warnings: string[] = [];
+    for (const acc of selectedAccounts) {
+      const rules = PLATFORM_MEDIA_RULES[acc.platform];
+      if (!rules) continue;
+      if (rules.maxImages === 0 && hasImages)
+        warnings.push(`${acc.platform} is video-only — images won't be posted there.`);
+      if (hasImages && rules.maxImages > 0 && mediaImages.length > rules.maxImages)
+        warnings.push(`${acc.platform} supports max ${rules.maxImages} images (you have ${mediaImages.length}).`);
+    }
+    return [...new Set(warnings)];
+  }, [mediaItems, selectedAccounts, hasImages, mediaImages.length]);
+
+  // ─── Library picker handlers ──────────────────────────────────────────────────
+
+  const openLibrary = useCallback(async () => {
+    if (!activeBrand) return;
+    setLibraryOpen(true);
+    setLibrarySelected(new Set());
+    setLibraryLoading(true);
+    try {
+      const data = await api.get<Array<{ id: string; filename: string; mimeType: string; sizeBytes: number; url: string }>>(
+        `/brands/${activeBrand.id}/media`
+      );
+      setLibraryItems(data.map(m => ({ id: m.id, url: m.url, mimeType: m.mimeType, name: m.filename, size: m.sizeBytes })));
+    } catch {
+      setLibraryItems([]);
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, [activeBrand]);
+
+  const confirmLibrarySelection = () => {
+    const chosen = libraryItems.filter(i => librarySelected.has(i.id));
+    if (!chosen.length) { setLibraryOpen(false); return; }
+    setMediaItems(prev => {
+      const existingIds = new Set(prev.map(m => m.id));
+      return [...prev, ...chosen.filter(c => !existingIds.has(c.id))];
+    });
+    setLibraryOpen(false);
+    setLibrarySelected(new Set());
+  };
+
+  // ─── Handlers ─────────────────────────────────────────────────────────────────
 
   const toggleAccount = (id: string, platform: string) => {
     setSelectedAccountIds((prev) => {
@@ -96,19 +216,101 @@ export function EditPostView({ postId }: { postId: string }) {
     });
   };
 
-  const selectedAccounts = accounts.filter((a) => selectedAccountIds.has(a.id));
-  const previewPlatform = activePreview || selectedAccounts[0]?.platform || 'Instagram';
+  const uploadFile = async (file: File): Promise<MediaItem> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('relay_token') : null;
+    const res = await fetch(`${API_BASE}/brands/${activeBrand!.id}/media/upload`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(Array.isArray(err.message) ? err.message[0] : (err.message ?? 'Upload failed'));
+    }
+    const media = await res.json();
+    return { id: media.id, url: media.url, mimeType: media.mimeType, name: media.filename, size: media.sizeBytes };
+  };
 
-  const handleAiAction = (prompt: string) => {
+  const handleMediaFiles = async (files: FileList | File[]) => {
+    const fileArr = Array.from(files);
+    if (!fileArr.length || !activeBrand) return;
+    setMediaError('');
+
+    const firstIsVideo = fileArr[0].type.startsWith('video/');
+    if (firstIsVideo && hasImages) { setMediaError('Cannot mix images and video in the same post.'); return; }
+    if (!firstIsVideo && hasVideo)  { setMediaError('Cannot mix images and video in the same post.'); return; }
+
+    for (const file of fileArr) {
+      const sizeMB = file.size / (1024 * 1024);
+      const isImg = file.type.startsWith('image/');
+      for (const acc of selectedAccounts) {
+        const rules = PLATFORM_MEDIA_RULES[acc.platform];
+        if (!rules) continue;
+        if (isImg && rules.maxImages === 0) {
+          setMediaError(`${acc.platform} only supports video.`); return;
+        }
+        if (isImg && sizeMB > rules.imageSizeMB) {
+          setMediaError(`"${file.name}" exceeds ${acc.platform}'s ${rules.imageSizeMB} MB image limit.`); return;
+        }
+        if (!isImg && sizeMB > rules.videoSizeMB) {
+          setMediaError(`"${file.name}" exceeds ${acc.platform}'s ${rules.videoSizeMB} MB video limit.`); return;
+        }
+      }
+    }
+
+    if (!firstIsVideo && mediaImages.length + fileArr.length > effectiveMaxImages) {
+      setMediaError(`Max ${effectiveMaxImages} images for your selected platform(s).`); return;
+    }
+
+    setMediaUploading(true);
+    try {
+      const uploaded = await Promise.all(fileArr.map(uploadFile));
+      setMediaItems(prev => [...prev, ...uploaded]);
+    } catch (e: unknown) {
+      setMediaError(e instanceof Error ? e.message : 'Upload failed. Please try again.');
+    } finally {
+      setMediaUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // In edit mode, just remove from local state — save will update the DB relation
+  const removeMedia = (id: string) => {
+    setMediaItems(prev => prev.filter(m => m.id !== id));
+  };
+
+  const handleAiAction = async (prompt: string) => {
+    if (!activeBrand || !caption.trim()) { toast('Write a caption first', 'error'); return; }
+    if (prompt === 'shorten-for-x') {
+      setCaption((p) => p.slice(0, 280) + (p.length > 280 ? '…' : ''));
+      toast('Shortened for X', 'sparkle');
+      return;
+    }
     setIsAiLoading(true);
-    setTimeout(() => {
-      if (prompt === 'add-hashtags') setCaption((p) => p + '\n\n#ContentCreator #GrowthHacking #DigitalMarketing #SMM');
-      else if (prompt === 'add-hook') setCaption((p) => '🔥 Stop scrolling! ' + p);
-      else if (prompt === 'shorten-for-x') setCaption((p) => p.slice(0, 270) + (p.length > 270 ? '…' : ''));
-      else toast('Tone polished with AI!', 'sparkle');
+    try {
+      if (prompt === 'add-hashtags') {
+        const { popular } = await api.post<{ popular: string[]; niche: string[] }>(
+          `/brands/${activeBrand.id}/ai/generate-hashtags`,
+          { topic: caption.slice(0, 200) },
+        );
+        setCaption((p) => `${p}\n\n${popular.join(' ')}`);
+        toast('Hashtags added', 'sparkle');
+      } else {
+        const action = prompt === 'add-hook' ? 'add-hook' : 'improve-tone';
+        const { improved } = await api.post<{ improved: string }>(
+          `/brands/${activeBrand.id}/ai/improve-caption`,
+          { caption, action },
+        );
+        setCaption(improved);
+        toast('Caption improved', 'sparkle');
+      }
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'AI action failed', 'error');
+    } finally {
       setIsAiLoading(false);
-      toast('Applied AI action', 'sparkle');
-    }, 800);
+    }
   };
 
   const handleSave = async () => {
@@ -123,12 +325,15 @@ export function EditPostView({ postId }: { postId: string }) {
     try {
       const targets = [...selectedAccountIds].map((accountId) => ({ accountId, caption }));
 
-      // If currently scheduled, cancel first so we can re-apply timing
       if (post.status === 'Scheduled' && mode !== 'schedule') {
         await cancelPost(activeBrand.id, post.id);
       }
 
-      await updatePost(activeBrand.id, post.id, { title: title.trim(), targets });
+      await updatePost(activeBrand.id, post.id, {
+        title: title.trim(),
+        targets,
+        mediaIds: mediaItems.map(m => m.id),
+      });
 
       if (mode === 'now') {
         await publishNow(activeBrand.id, post.id);
@@ -146,7 +351,8 @@ export function EditPostView({ postId }: { postId: string }) {
     }
   };
 
-  // Loading state while post is being fetched
+  // ─── Guards ───────────────────────────────────────────────────────────────────
+
   if (!post && posts.length === 0) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -155,15 +361,12 @@ export function EditPostView({ postId }: { postId: string }) {
     );
   }
 
-  // Post not found
   if (!post) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
         <AlertCircle size={24} className="text-gray-300" />
         <p className="text-sm font-medium text-gray-500">Post not found</p>
-        <Link href="/queue" className="text-xs text-orange-500 hover:text-orange-600 font-medium">
-          ← Back to queue
-        </Link>
+        <Link href="/queue" className="text-xs text-orange-500 hover:text-orange-600 font-medium">← Back to queue</Link>
       </div>
     );
   }
@@ -178,6 +381,8 @@ export function EditPostView({ postId }: { postId: string }) {
   }
 
   const isReadOnly = post.status === 'Publishing' || post.status === 'Published';
+
+  // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col gap-4">
@@ -202,18 +407,13 @@ export function EditPostView({ postId }: { postId: string }) {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={isSubmitting || isReadOnly}
-          className="btn-clay-primary h-8 px-4 text-xs font-semibold gap-1.5 inline-flex items-center disabled:opacity-50"
-        >
+        <button type="button" onClick={handleSave} disabled={isSubmitting || isReadOnly}
+          className="btn-clay-primary h-8 px-4 text-xs font-semibold gap-1.5 inline-flex items-center disabled:opacity-50">
           {isSubmitting ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
           {isSubmitting ? 'Saving…' : 'Save changes'}
         </button>
       </div>
 
-      {/* Read-only warning */}
       {isReadOnly && (
         <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
           <AlertCircle size={14} className="text-amber-500 shrink-0" />
@@ -223,7 +423,6 @@ export function EditPostView({ postId }: { postId: string }) {
         </div>
       )}
 
-      {/* Error */}
       {submitError && (
         <div className="flex items-center gap-2.5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl">
           <AlertCircle size={14} className="text-red-500 shrink-0" />
@@ -232,21 +431,15 @@ export function EditPostView({ postId }: { postId: string }) {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left: Composer */}
+        {/* ── Left: Composer ─────────────────────────────────────────────────── */}
         <div className="lg:col-span-7 flex flex-col gap-4">
 
           {/* Title */}
           <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-2xs">
             <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">Post Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Product launch announcement"
-              maxLength={200}
-              disabled={isReadOnly}
-              className="w-full h-[38px] px-3 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            />
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Product launch announcement" maxLength={200} disabled={isReadOnly}
+              className="w-full h-[38px] px-3 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors disabled:opacity-60 disabled:cursor-not-allowed" />
           </div>
 
           {/* Platform selector */}
@@ -266,13 +459,22 @@ export function EditPostView({ postId }: { postId: string }) {
                   const meta = PLATFORM_META[acc.platform];
                   const active = selectedAccountIds.has(acc.id);
                   return (
-                    <button key={acc.id} type="button" onClick={() => !isReadOnly && toggleAccount(acc.id, acc.platform)}
+                    <button key={acc.id} type="button"
+                      onClick={() => !isReadOnly && toggleAccount(acc.id, acc.platform)}
                       disabled={isReadOnly}
                       className={cn('flex items-center gap-2 h-8 px-3 rounded-lg border text-xs font-semibold transition-all disabled:cursor-not-allowed',
                         active ? 'bg-orange-50 border-orange-300 text-orange-700 shadow-2xs' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-white hover:text-gray-700')}>
                       <PlatformBadge platform={PLATFORM_BADGE_ID[acc.platform] ?? acc.platform.toLowerCase()} size="sm" />
                       <span>{meta?.label ?? acc.platform}</span>
                       <span className="text-gray-400 font-normal">{acc.platformHandle}</span>
+                      {acc.platform === 'LinkedIn' && (
+                        <span className={cn('text-[10px] font-semibold px-1 py-0.5 rounded',
+                          acc.platformUserId?.startsWith('org:')
+                            ? 'bg-blue-100 text-blue-600'
+                            : 'bg-gray-100 text-gray-500')}>
+                          {acc.platformUserId?.startsWith('org:') ? 'Page' : 'Personal'}
+                        </span>
+                      )}
                       {active && <Check size={12} className="text-orange-600 stroke-[2.5]" />}
                     </button>
                   );
@@ -299,16 +501,9 @@ export function EditPostView({ postId }: { postId: string }) {
                 })}
               </div>
             </div>
-
-            <textarea
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              placeholder="Write your post content here…"
-              rows={6}
-              disabled={isReadOnly}
-              className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-3 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors leading-relaxed resize-none disabled:opacity-60 disabled:cursor-not-allowed"
-            />
-
+            <textarea value={caption} onChange={(e) => setCaption(e.target.value)}
+              placeholder="Write your post content here…" rows={6} disabled={isReadOnly}
+              className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-3 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors leading-relaxed resize-none disabled:opacity-60 disabled:cursor-not-allowed" />
             {!isReadOnly && (
               <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
                 <div className="flex items-center justify-between">
@@ -329,6 +524,120 @@ export function EditPostView({ postId }: { postId: string }) {
               </div>
             )}
           </div>
+
+          {/* Media */}
+          {!isReadOnly && (
+            <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 shadow-2xs">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <ImageIcon size={13} className="text-gray-500" /> Media
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {selectedAccounts.map(acc => {
+                    const rules = PLATFORM_MEDIA_RULES[acc.platform];
+                    if (!rules) return null;
+                    return (
+                      <span key={acc.platform} className="text-[10px] font-medium text-gray-400 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded">
+                        {acc.platform}: {rules.note}
+                      </span>
+                    );
+                  })}
+                  <button type="button" onClick={openLibrary}
+                    className="flex items-center gap-1 h-6 px-2.5 text-[11px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors">
+                    <FolderOpen size={11} /> Browse library
+                  </button>
+                </div>
+              </div>
+
+              {mediaError && (
+                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+                  <AlertCircle size={12} className="text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-[11px] font-medium text-red-700">{mediaError}</p>
+                </div>
+              )}
+
+              {mediaWarnings.map((w, i) => (
+                <div key={i} className="flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                  <AlertCircle size={12} className="text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] font-medium text-amber-700">{w}</p>
+                </div>
+              ))}
+
+              {/* Thumbnail grid */}
+              {mediaItems.length > 0 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {mediaItems.map((item) => (
+                    <div key={item.id} className="relative group aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200 shadow-2xs">
+                      {item.mimeType.startsWith('image/') ? (
+                        <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 p-2">
+                          <Film size={22} className="text-gray-400" />
+                          <span className="text-[10px] text-gray-400 font-medium text-center break-all leading-tight line-clamp-2">{item.name}</span>
+                        </div>
+                      )}
+                      <button type="button" onClick={() => removeMedia(item.id)}
+                        className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
+                        <XIcon size={10} />
+                      </button>
+                    </div>
+                  ))}
+                  {canAddMore && (
+                    <label className="aspect-square rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-orange-400 hover:bg-orange-50/30 transition-colors">
+                      {mediaUploading ? (
+                        <Loader2 size={16} className="text-orange-500 animate-spin" />
+                      ) : (
+                        <>
+                          <Plus size={18} className="text-gray-400" />
+                          <span className="text-[10px] text-gray-400 font-medium">Add</span>
+                        </>
+                      )}
+                      <input type="file" accept={fileInputAccept} multiple className="hidden"
+                        onChange={(e) => e.target.files && handleMediaFiles(e.target.files)} />
+                    </label>
+                  )}
+                </div>
+              )}
+
+              {/* Drop zone (empty state) */}
+              {mediaItems.length === 0 && (
+                <label
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-3 py-9 border-2 border-dashed rounded-xl cursor-pointer transition-colors',
+                    mediaUploading ? 'border-orange-300 bg-orange-50/30' : 'border-gray-200 hover:border-orange-400 hover:bg-orange-50/20',
+                  )}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files) handleMediaFiles(e.dataTransfer.files); }}
+                >
+                  {mediaUploading ? (
+                    <Loader2 size={26} className="text-orange-500 animate-spin" />
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2.5 text-gray-300">
+                        <ImageIcon size={26} />
+                        <span className="text-gray-200 font-light text-lg">/</span>
+                        <Film size={26} />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[13px] font-semibold text-gray-600">
+                          Drop files here or <span className="text-orange-500">browse</span>
+                        </p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">JPEG · PNG · GIF · WebP · MP4 · MOV</p>
+                      </div>
+                    </>
+                  )}
+                  <input ref={fileInputRef} type="file" accept={fileInputAccept} multiple className="hidden"
+                    onChange={(e) => e.target.files && handleMediaFiles(e.target.files)} />
+                </label>
+              )}
+
+              {mediaUploading && mediaItems.length > 0 && (
+                <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                  <Loader2 size={12} className="animate-spin text-orange-500" /> Uploading…
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Schedule options */}
           {!isReadOnly && (
@@ -357,9 +666,9 @@ export function EditPostView({ postId }: { postId: string }) {
           )}
         </div>
 
-        {/* Right: Preview */}
+        {/* ── Right: Preview ──────────────────────────────────────────────────── */}
         <div className="lg:col-span-5 flex flex-col gap-3">
-          <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-col gap-3 shadow-2xs">
+          <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-col gap-3 shadow-2xs sticky top-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
               <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">Live Preview</span>
               <span className="text-[11px] font-semibold text-gray-400">Platform Mockup</span>
@@ -367,47 +676,65 @@ export function EditPostView({ postId }: { postId: string }) {
 
             {selectedAccounts.length > 0 && (
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                {selectedAccounts.map((acc) => {
-                  const isActive = previewPlatform === acc.platform;
-                  return (
-                    <button key={acc.id} type="button" onClick={() => setActivePreview(acc.platform)}
-                      className={cn('flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-semibold transition-all shrink-0',
-                        isActive ? 'bg-gray-900 text-white shadow-2xs' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}>
-                      <PlatformBadge platform={PLATFORM_BADGE_ID[acc.platform] ?? acc.platform.toLowerCase()} size="sm" />
-                      <span>{PLATFORM_META[acc.platform]?.label ?? acc.platform}</span>
-                    </button>
-                  );
-                })}
+                {selectedAccounts.map((acc) => (
+                  <button key={acc.id} type="button" onClick={() => setActivePreview(acc.platform)}
+                    className={cn('flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-semibold transition-all shrink-0',
+                      previewPlatform === acc.platform ? 'bg-gray-900 text-white shadow-2xs' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}>
+                    <PlatformBadge platform={PLATFORM_BADGE_ID[acc.platform] ?? acc.platform.toLowerCase()} size="sm" />
+                    <span>{PLATFORM_META[acc.platform]?.label ?? acc.platform}</span>
+                  </button>
+                ))}
               </div>
             )}
 
-            <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
+            <div className="border border-gray-200 rounded-xl overflow-hidden bg-white flex flex-col">
+              <div className="flex items-center justify-between p-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-2xs"
                     style={{ backgroundColor: activeBrand.colorHex }}>
                     {activeBrand.name[0].toUpperCase()}
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-gray-900">{activeBrand.name}</span>
-                    <p className="text-[10px] text-gray-400">Just now · Public</p>
+                    <span className="text-xs font-bold text-gray-900 block">{activeBrand.name}</span>
+                    <span className="text-[10px] text-gray-400">Just now · Public</span>
                   </div>
                 </div>
                 <PlatformBadge platform={PLATFORM_BADGE_ID[previewPlatform] ?? previewPlatform.toLowerCase()} size="md" />
               </div>
 
-              <p className="text-xs text-gray-900 leading-relaxed whitespace-pre-wrap">
-                {caption || <span className="text-gray-400 italic">Your caption will appear here…</span>}
-              </p>
-
-              <div className="flex items-center justify-between pt-2 border-t border-gray-200/80 text-gray-500">
-                {previewPlatform === 'Instagram' && (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <Heart size={16} /><MessageCircle size={16} /><Send size={15} />
+              {/* Media preview */}
+              {mediaItems.length > 0 && (
+                <div className="w-full bg-black">
+                  {hasVideo ? (
+                    <video src={mediaVideos[0].url} controls className="w-full aspect-video object-contain max-h-48" />
+                  ) : mediaImages.length === 1 ? (
+                    <img src={mediaImages[0].url} alt="preview" className="w-full aspect-square object-cover" />
+                  ) : (
+                    <div className={cn('grid gap-0.5', mediaImages.length >= 4 ? 'grid-cols-2' : mediaImages.length === 3 ? 'grid-cols-3' : 'grid-cols-2')}>
+                      {mediaImages.slice(0, 4).map((img, i) => (
+                        <div key={img.id} className="relative aspect-square">
+                          <img src={img.url} alt="preview" className="w-full h-full object-cover" />
+                          {i === 3 && mediaImages.length > 4 && (
+                            <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
+                              <span className="text-white font-bold text-sm">+{mediaImages.length - 4}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    <Bookmark size={16} />
-                  </>
+                  )}
+                </div>
+              )}
+
+              <div className="px-3 pt-2 pb-1">
+                <p className="text-xs text-gray-900 leading-relaxed whitespace-pre-wrap">
+                  {caption || <span className="text-gray-400 italic">Your caption will appear here…</span>}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between px-3 py-2.5 border-t border-gray-100 text-gray-500 mt-1">
+                {previewPlatform === 'Instagram' && (
+                  <><div className="flex items-center gap-3"><Heart size={16} /><MessageCircle size={16} /><Send size={15} /></div><Bookmark size={16} /></>
                 )}
                 {previewPlatform === 'LinkedIn' && (
                   <div className="flex items-center justify-between w-full text-[11px] font-semibold text-gray-600">
@@ -434,6 +761,85 @@ export function EditPostView({ postId }: { postId: string }) {
           </div>
         </div>
       </div>
+
+      {/* ── Library picker modal ─────────────────────────────────────────────── */}
+      {libraryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[85vh]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <p className="text-[15px] font-bold text-gray-900">Browse Media Library</p>
+                <p className="text-[12px] text-gray-400 mt-0.5">Select files to add to this post</p>
+              </div>
+              <button type="button" onClick={() => setLibraryOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {libraryLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 size={24} className="animate-spin text-orange-500" />
+                </div>
+              ) : libraryItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <ImageIcon size={32} className="text-gray-200" />
+                  <p className="text-sm font-medium text-gray-400">No media uploaded yet</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                  {libraryItems.map((item) => {
+                    const sel = librarySelected.has(item.id);
+                    return (
+                      <button key={item.id} type="button"
+                        onClick={() => setLibrarySelected(prev => {
+                          const n = new Set(prev);
+                          sel ? n.delete(item.id) : n.add(item.id);
+                          return n;
+                        })}
+                        className={cn(
+                          'relative aspect-square rounded-xl overflow-hidden border-2 transition-all',
+                          sel ? 'border-orange-500 ring-2 ring-orange-500/20' : 'border-transparent hover:border-orange-300',
+                        )}>
+                        {item.mimeType.startsWith('image/') ? (
+                          <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-gray-100 flex flex-col items-center justify-center gap-1.5 p-2">
+                            <Film size={20} className="text-gray-400" />
+                            <span className="text-[10px] text-gray-400 font-medium text-center break-all leading-tight line-clamp-2">{item.name}</span>
+                          </div>
+                        )}
+                        {sel && (
+                          <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center shadow">
+                            <Check size={11} strokeWidth={3} className="text-white" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between px-5 py-3.5 border-t border-gray-100 bg-gray-50/60">
+              <span className="text-[12px] text-gray-500">
+                {librarySelected.size > 0 ? `${librarySelected.size} selected` : 'Click to select files'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setLibraryOpen(false)}
+                  className="btn-clay-secondary h-8 px-4 text-xs font-semibold">
+                  Cancel
+                </button>
+                <button type="button" onClick={confirmLibrarySelection} disabled={librarySelected.size === 0}
+                  className="btn-clay-primary h-8 px-4 text-xs font-semibold disabled:opacity-40 flex items-center gap-1.5">
+                  <Plus size={13} /> Add {librarySelected.size > 0 ? librarySelected.size : ''} to post
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

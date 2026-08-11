@@ -1,5 +1,10 @@
+import { Suspense } from 'react';
 import { CreatePostView } from '@/components/posts/CreatePostView';
 
 export default function NewPostPage() {
-  return <CreatePostView />;
+  return (
+    <Suspense>
+      <CreatePostView />
+    </Suspense>
+  );
 }

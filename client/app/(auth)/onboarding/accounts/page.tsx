@@ -1,7 +1,111 @@
-﻿import Link from 'next/link';
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { Loader2 } from 'lucide-react';
 import { PLATFORMS } from '@/components/accounts/platforms';
+import { PlatformDef } from '@/components/accounts/PlatformCard';
+import { ConnectGuideModal } from '@/components/accounts/ConnectGuideModal';
+import { useBrandStore } from '@/store/brand';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+
+function PlatformRow({ platform, brandId }: { platform: PlatformDef; brandId: string }) {
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState('');
+  const [showGuide, setShowGuide] = useState(false);
+  const hasGuide = !!platform.guideSteps?.length;
+
+  const handleConnect = async () => {
+    setError('');
+    setConnecting(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('relay_token') : null;
+      if (!token) throw new Error('Not logged in');
+
+      const res = await fetch(`${API_BASE}/oauth/connect/${platform.platform.toLowerCase()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ brandId }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as any;
+        throw new Error(err.message ?? `Failed to start OAuth (${res.status})`);
+      }
+
+      const { url } = await res.json() as { url: string };
+      window.location.href = url;
+    } catch (err: any) {
+      setError(err.message ?? 'Failed to connect');
+      setConnecting(false);
+    }
+  };
+
+  if (platform.comingSoon) {
+    return (
+      <div className="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 bg-gray-50 opacity-60">
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${platform.color}`}>
+          {platform.icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-gray-900">{platform.name}</p>
+          <p className="text-[11px] text-gray-500">{platform.description}</p>
+        </div>
+        <span className="shrink-0 h-7 px-2.5 text-[11px] font-semibold bg-gray-200 text-gray-500 rounded-lg inline-flex items-center">
+          Coming Soon
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 bg-gray-50">
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${platform.color}`}>
+        {platform.icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-bold text-gray-900">{platform.name}</p>
+        <p className="text-[11px] text-gray-500">{platform.description}</p>
+        {error && <p className="text-[10px] text-red-500 mt-0.5">{error}</p>}
+      </div>
+      <button
+        onClick={() => (hasGuide ? setShowGuide(true) : handleConnect())}
+        disabled={connecting || !brandId}
+        className="shrink-0 h-7 px-2.5 text-[11px] font-semibold btn-clay-primary disabled:opacity-50 inline-flex items-center gap-1.5"
+      >
+        {connecting
+          ? <><Loader2 size={11} className="animate-spin" /> Connecting…</>
+          : `Connect`
+        }
+      </button>
+
+      {hasGuide && (
+        <ConnectGuideModal
+          open={showGuide}
+          platform={platform}
+          onClose={() => setShowGuide(false)}
+          onContinue={() => {
+            setShowGuide(false);
+            handleConnect();
+          }}
+        />
+      )}
+    </div>
+  );
+}
 
 export default function OnboardingAccountsPage() {
+  const activeBrand = useBrandStore((s) => s.activeBrand());
+  const { fetchBrands, status } = useBrandStore();
+
+  useEffect(() => {
+    if (status === 'idle') fetchBrands();
+  }, [status, fetchBrands]);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen py-8 px-4 bg-[#F8F9FA]">
       {/* Logo */}
@@ -37,17 +141,20 @@ export default function OnboardingAccountsPage() {
         </div>
 
         <div className="px-6 pb-5 grid grid-cols-1 gap-2.5">
-          {PLATFORMS.map((platform) => (
-            <div key={platform.id} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 bg-gray-50">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${platform.color}`}>
-                {platform.icon}
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-900">{platform.name}</p>
-                <p className="text-[11px] text-gray-500">{platform.description}</p>
-              </div>
+          {!activeBrand && status === 'loading' ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-gray-400">
+              <Loader2 size={15} className="animate-spin" />
+              <span className="text-xs">Loading…</span>
             </div>
-          ))}
+          ) : (
+            PLATFORMS.map((platform) => (
+              <PlatformRow
+                key={platform.id}
+                platform={platform}
+                brandId={activeBrand?.id ?? ''}
+              />
+            ))
+          )}
         </div>
 
         {/* Footer */}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Eye, Heart, Users, Zap, AlertCircle, Loader2 } from 'lucide-react';
+import { TrendingUp, Eye, Heart, Users, Zap, AlertCircle, Loader2, Lightbulb, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/store/brand';
 import { api, ApiError } from '@/lib/api';
@@ -20,26 +20,6 @@ interface AnalyticsOverview {
     shares: number; saves: number; clicks: number; count: number;
   }>;
 }
-
-// ─── Seeded decorative chart data (illustrative only) ─────────────────────────
-
-function seed(n: number) { return (Math.abs(Math.sin(n * 9301 + 49297)) * 233280) % 1; }
-
-function buildSeries(days: number, base: number, variance: number, trend: number): number[] {
-  const out: number[] = [];
-  let v = base;
-  for (let i = 0; i < days; i++) {
-    v += trend + (seed(i + base) - 0.5) * variance;
-    out.push(Math.max(0, Math.round(v)));
-  }
-  return out;
-}
-
-const SEED_90 = {
-  reach:       buildSeries(90, 3800,  900,  35),
-  impressions: buildSeries(90, 9200,  1800, 80),
-  engagements: buildSeries(90, 480,   120,  3),
-};
 
 // ─── Chart utils ──────────────────────────────────────────────────────────────
 
@@ -202,10 +182,10 @@ function PlatformBar({ name, reach, posts, engRate, maxReach }: {
 
 type MetricKey = 'reach' | 'impressions' | 'engagements';
 
-const METRICS: { key: MetricKey; label: string; icon: typeof Eye; svgColor: string; seedKey: keyof typeof SEED_90 }[] = [
-  { key: 'reach',       label: 'Reach',      icon: Eye,   svgColor: '#6366F1', seedKey: 'reach'       },
-  { key: 'impressions', label: 'Impressions', icon: Zap,   svgColor: '#8B5CF6', seedKey: 'impressions' },
-  { key: 'engagements', label: 'Engagements', icon: Heart, svgColor: '#EC4899', seedKey: 'engagements' },
+const METRICS: { key: MetricKey; label: string; icon: typeof Eye; svgColor: string }[] = [
+  { key: 'reach',       label: 'Reach',       icon: Eye,   svgColor: '#6366F1' },
+  { key: 'impressions', label: 'Impressions',  icon: Zap,   svgColor: '#8B5CF6' },
+  { key: 'engagements', label: 'Engagements',  icon: Heart, svgColor: '#EC4899' },
 ];
 
 type Period = 7 | 30 | 90;
@@ -216,11 +196,14 @@ export function AnalyticsView() {
   const [period, setPeriod] = useState<Period>(30);
   const [activeMetric, setActiveMetric] = useState<MetricKey>('reach');
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
+  const [timeSeries, setTimeSeries] = useState<{ date: string; value: number }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [chartLoading, setChartLoading] = useState(false);
   const [error, setError] = useState('');
 
   const activeBrand = useBrandStore((s) => s.activeBrand());
 
+  // Fetch KPI overview
   useEffect(() => {
     if (!activeBrand) return;
     setLoading(true);
@@ -233,20 +216,26 @@ export function AnalyticsView() {
       .finally(() => setLoading(false));
   }, [activeBrand?.id, period]);
 
-  // Decorative seed series for charts (scaled to real totals if available)
-  const chartData = useMemo(() => {
-    const slice = (arr: number[]) => arr.slice(90 - period);
-    return { reach: slice(SEED_90.reach), impressions: slice(SEED_90.impressions), engagements: slice(SEED_90.engagements) };
-  }, [period]);
+  // Fetch time-series for chart
+  useEffect(() => {
+    if (!activeBrand) return;
+    setChartLoading(true);
+    const from = new Date(Date.now() - period * 86_400_000).toISOString();
+    const to = new Date().toISOString();
+    const metric = activeMetric === 'engagements' ? 'engagements' : activeMetric;
+    api.get<{ date: string; value: number }[]>(
+      `/brands/${activeBrand.id}/analytics/time-series?metric=${metric}&from=${from}&to=${to}`
+    )
+      .then(setTimeSeries)
+      .catch(() => setTimeSeries([]))
+      .finally(() => setChartLoading(false));
+  }, [activeBrand?.id, period, activeMetric]);
 
-  const labels = useMemo(() => {
-    const now = new Date();
-    return Array.from({ length: period }, (_, i) => {
-      const d = new Date(now);
-      d.setDate(now.getDate() - (period - 1 - i));
-      return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
-    });
-  }, [period]);
+  const chartValues = useMemo(() => timeSeries.map(d => d.value), [timeSeries]);
+  const labels = useMemo(() => timeSeries.map(d => {
+    const dt = new Date(d.date);
+    return dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+  }), [timeSeries]);
 
   // Real totals from API
   const totals = overview?.totals;
@@ -267,9 +256,49 @@ export function AnalyticsView() {
     });
   }, [overview]);
 
+  // Performance-based suggestions — derived from real platform/engagement data when available.
+  // Templated rules, not a trained model — framed as "suggested" rather than a guarantee.
+  const suggestions = useMemo(() => {
+    if (!platformRows.length) return [];
+    const items: { title: string; detail: string }[] = [];
+
+    const byEngagement = [...platformRows].sort((a, b) => parseFloat(b.engRate) - parseFloat(a.engRate));
+    const best = byEngagement[0];
+    if (best && parseFloat(best.engRate) > 0) {
+      items.push({
+        title: `${best.name} is your best-performing platform`,
+        detail: `Posts there average a ${best.engRate}% engagement rate — your highest across connected platforms. Consider posting there more often, or repurposing your top ${best.name} content for other platforms.`,
+      });
+    }
+
+    const totalPosts = totals?.count ?? 0;
+    if (totalPosts > 0) {
+      const perDay = (totalPosts / period).toFixed(1);
+      items.push({
+        title: `You're averaging ${perDay} post${perDay === '1.0' ? '' : 's'}/day`,
+        detail: totalPosts >= period
+          ? 'Consistent posting is paying off — keep this cadence to maintain reach.'
+          : 'Accounts that post more consistently tend to see steadier reach — try filling a few more slots on your content calendar this week.',
+      });
+    }
+
+    if (totals && totals.impressions > 0) {
+      const saveRate = ((totals.saves / totals.impressions) * 100).toFixed(1);
+      if (totals.saves > 0) {
+        items.push({
+          title: `Saves are ${saveRate}% of impressions`,
+          detail: 'Content people save tends to be reference-worthy (tips, lists, how-tos). Posts like your highest-saved ones are worth making more of.',
+        });
+      }
+    }
+
+    return items.slice(0, 3);
+  }, [platformRows, totals, period]);
+
   const maxReach = Math.max(...platformRows.map(p => p.reach), 1);
   const activeColor = METRICS.find(m => m.key === activeMetric)!.svgColor;
   const hasData = totals && (totals.reach + totals.impressions + totals.likes) > 0;
+  const chartHasData = chartValues.some(v => v > 0);
 
   if (!activeBrand) {
     return (
@@ -319,9 +348,10 @@ export function AnalyticsView() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {METRICS.map(({ key, label, icon: Icon, svgColor, seedKey }) => {
+        {METRICS.map(({ key, label, icon: Icon, svgColor }) => {
           const value = realValues[key];
           const isActive = activeMetric === key;
+          const sparkValues = isActive && chartValues.length > 0 ? chartValues.slice(-20) : [0, 0];
           return (
             <button key={key} onClick={() => setActiveMetric(key)}
               className={cn('bg-white border rounded-xl p-3 flex flex-col gap-2 text-left transition-colors shadow-2xs cursor-pointer',
@@ -336,7 +366,7 @@ export function AnalyticsView() {
                   <Users size={10} className="mr-0.5 inline" />
                   {period}d
                 </span>
-                <Sparkline values={chartData[seedKey].slice(-20)} color={svgColor} />
+                <Sparkline values={sparkValues} color={svgColor} />
               </div>
             </button>
           );
@@ -358,7 +388,7 @@ export function AnalyticsView() {
         </div>
       </div>
 
-      {/* Main Chart (decorative — illustrates trends) */}
+      {/* Main Chart */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 shadow-2xs">
         <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
           <h3 className="text-sm font-bold text-gray-900 tracking-tight capitalize">
@@ -366,12 +396,21 @@ export function AnalyticsView() {
           </h3>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-gray-500">Last {period} days</span>
-            <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Illustrative</span>
+            {chartLoading && <Loader2 size={12} className="animate-spin text-gray-400" />}
+            {!chartLoading && !chartHasData && (
+              <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">No data yet</span>
+            )}
           </div>
         </div>
         <div className="overflow-x-auto">
           <div className="min-w-[480px]">
-            <AreaChart values={chartData[activeMetric as keyof typeof chartData] ?? chartData.reach} color={activeColor} labels={labels} />
+            {chartValues.length > 1 ? (
+              <AreaChart values={chartValues} color={activeColor} labels={labels} />
+            ) : (
+              <div className="flex items-center justify-center h-[180px]">
+                <p className="text-xs text-gray-400">Publish posts to see trend data here.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -414,6 +453,28 @@ export function AnalyticsView() {
           )}
         </div>
       </div>
+
+      {/* Performance-based suggestions */}
+      {suggestions.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-gray-900 tracking-tight flex items-center gap-1.5">
+              <Lightbulb size={14} className="text-orange-500" /> Suggested for you
+            </h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-400">
+              <Info size={11} /> Based on your data
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {suggestions.map((s, i) => (
+              <div key={i} className="flex flex-col gap-1.5 p-3 bg-orange-50/50 border border-orange-100 rounded-lg">
+                <p className="text-xs font-bold text-gray-900 leading-snug">{s.title}</p>
+                <p className="text-[11.5px] text-gray-500 leading-relaxed">{s.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,21 +7,25 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Calendar, ListOrdered, BarChart2, Link2,
   Sparkles, LayoutTemplate, Image, Settings, ChevronsUpDown,
-  Check, Plus, X, AlertCircle, Loader2,
+  Check, Plus, X, AlertCircle, Loader2, LogOut, MessageSquare,
+  TrendingUp, FlaskConical,
 } from 'lucide-react';
 import { CreateBrandModal } from '@/components/brands/CreateBrandModal';
 import { useBrandStore, Brand } from '@/store/brand';
 import { useAuthStore } from '@/store/auth';
 
 const navItems = [
-  { label: 'Dashboard',          icon: LayoutDashboard, href: '/dashboard',   ai: false },
-  { label: 'Content Calendar',   icon: Calendar,        href: '/calendar',    ai: false },
-  { label: 'Post Queue',         icon: ListOrdered,     href: '/queue',       ai: false },
-  { label: 'Templates',          icon: LayoutTemplate,  href: '/templates',   ai: false },
-  { label: 'Media Library',      icon: Image,           href: '/media',       ai: false },
-  { label: 'Analytics',          icon: BarChart2,       href: '/analytics',   ai: false },
-  { label: 'AI Studio',          icon: Sparkles,        href: '/ai-studio',   ai: true  },
-  { label: 'Connected Accounts', icon: Link2,           href: '/accounts',    ai: false },
+  { label: 'Dashboard',          icon: LayoutDashboard, href: '/dashboard',    tag: null      },
+  { label: 'Content Calendar',   icon: Calendar,        href: '/calendar',     tag: null      },
+  { label: 'Post Queue',         icon: ListOrdered,     href: '/queue',        tag: null      },
+  { label: 'Templates',          icon: LayoutTemplate,  href: '/templates',    tag: null      },
+  { label: 'Media Library',      icon: Image,           href: '/media',       tag: null      },
+  { label: 'Analytics',          icon: BarChart2,       href: '/analytics',    tag: null      },
+  { label: 'AI Studio',          icon: Sparkles,        href: '/ai-studio',    tag: 'AI'      },
+  { label: 'Trends',             icon: TrendingUp,      href: '/trends',       tag: 'PREVIEW' },
+  { label: 'A/B Testing',        icon: FlaskConical,    href: '/ab-testing',   tag: 'PREVIEW' },
+  { label: 'Comments',           icon: MessageSquare,   href: '/comments',     tag: null      },
+  { label: 'Connected Accounts', icon: Link2,           href: '/accounts',     tag: null      },
 ];
 
 function BrandAvatar({ brand, size = 'md' }: { brand: Brand; size?: 'sm' | 'md' }) {
@@ -181,6 +185,12 @@ interface SidebarProps {
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const { user, logout } = useAuthStore();
+
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/login';
+  };
 
   return (
     <aside
@@ -225,7 +235,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors relative group',
                 isActive
                   ? 'bg-orange-50/80 text-orange-600 font-semibold'
-                  : item.ai
+                  : item.tag
                   ? 'text-orange-600 hover:bg-orange-50/60'
                   : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-900'
               )}
@@ -238,13 +248,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 strokeWidth={isActive ? 2 : 1.75}
                 className={cn(
                   'shrink-0',
-                  isActive ? 'text-orange-600' : item.ai ? 'text-orange-500' : 'text-gray-400 group-hover:text-gray-600'
+                  isActive ? 'text-orange-600' : item.tag ? 'text-orange-500' : 'text-gray-400 group-hover:text-gray-600'
                 )}
               />
               <span className="flex-1 truncate">{item.label}</span>
-              {item.ai && (
+              {item.tag && (
                 <span className="inline-flex items-center px-1 py-0.2 text-[9px] font-bold bg-orange-100 text-orange-700 rounded">
-                  AI
+                  {item.tag}
                 </span>
               )}
             </Link>
@@ -252,9 +262,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         })}
       </nav>
 
-      {/* Settings */}
-      <div className="px-2 pb-3 pt-1">
-        <div className="h-px bg-gray-100 mb-1.5" />
+      {/* Bottom: Settings + user + logout */}
+      <div className="px-2 pb-3 pt-1 flex flex-col gap-0.5">
+        <div className="h-px bg-gray-100 mb-1" />
+
         <Link
           href="/settings"
           onClick={onClose}
@@ -271,6 +282,28 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           <Settings size={15} strokeWidth={1.75} className="shrink-0 text-gray-400" />
           <span>Settings</span>
         </Link>
+
+        {/* User row + logout */}
+        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-100 mt-1">
+          <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+            <span className="text-[10px] font-bold text-orange-600">
+              {user?.name?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? '?'}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold text-gray-800 truncate leading-tight">
+              {user?.name ?? 'Account'}
+            </p>
+            <p className="text-[10px] text-gray-400 truncate leading-tight">{user?.email}</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            title="Log out"
+            className="shrink-0 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+          >
+            <LogOut size={13} />
+          </button>
+        </div>
       </div>
     </aside>
   );

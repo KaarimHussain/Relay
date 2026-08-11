@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { useAuthStore } from '@/store/auth';
 import { ApiError } from '@/lib/api';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, status } = useAuthStore();
@@ -45,7 +45,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen py-8 px-4 bg-[#F8F9FA]">
+    <div className="flex flex-col items-center justify-center min-h-[50vh] py-8 px-4 bg-[#F8F9FA]">
       {/* Logo */}
       <div className="flex items-center gap-2 mb-6">
         <svg width="30" height="30" viewBox="0 0 256 256" fill="none">
@@ -59,27 +59,6 @@ export default function LoginPage() {
         <div className="mb-5 text-center">
           <h1 className="text-xl font-bold text-gray-900 tracking-tight mb-0.5">Welcome back</h1>
           <p className="text-xs text-gray-500 font-normal">Sign in to your Relay workspace</p>
-        </div>
-
-        {/* Google OAuth — placeholder */}
-        <button
-          type="button"
-          className="btn-clay-secondary w-full h-9 text-xs gap-2 mb-4 font-semibold"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M15.68 8.18c0-.57-.05-1.11-.14-1.64H8v3.1h4.3a3.67 3.67 0 01-1.59 2.41v2h2.58c1.51-1.39 2.39-3.44 2.39-5.87z" fill="#4285F4" />
-            <path d="M8 16c2.16 0 3.97-.72 5.29-1.94l-2.58-2a4.8 4.8 0 01-7.15-2.52H.96v2.06A8 8 0 008 16z" fill="#34A853" />
-            <path d="M3.56 9.54A4.84 4.84 0 013.3 8c0-.54.09-1.06.26-1.54V4.4H.96A8 8 0 000 8c0 1.29.31 2.51.96 3.6l2.6-2.06z" fill="#FBBC05" />
-            <path d="M8 3.18c1.22 0 2.31.42 3.17 1.24l2.37-2.37A8 8 0 00.96 4.4l2.6 2.06A4.77 4.77 0 018 3.18z" fill="#EA4335" />
-          </svg>
-          Continue with Google
-        </button>
-
-        {/* Divider */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">or</span>
-          <div className="flex-1 h-px bg-gray-200" />
         </div>
 
         {/* Error banner */}
@@ -147,5 +126,13 @@ export default function LoginPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

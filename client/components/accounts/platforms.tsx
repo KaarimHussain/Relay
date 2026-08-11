@@ -43,6 +43,29 @@ export const PLATFORMS: PlatformDef[] = [
     color: 'bg-gradient-to-br from-pink-500 via-rose-500 to-amber-400',
     platform: 'Instagram' as Platform,
     icon: <InstagramIcon />,
+    guideIntro: "You'll need a Business (or Creator) Instagram account, linked to a Facebook Page, to connect here.",
+    guideSteps: [
+      {
+        title: 'Have a Facebook account',
+        detail: "You'll log in with Facebook, not Instagram, in the next step. If you don't have one, create one for free at facebook.com.",
+      },
+      {
+        title: 'Create a Facebook Page for your business',
+        detail: 'On Facebook, go to Pages → Create new Page. This is different from a personal profile — it only takes a minute to set up.',
+      },
+      {
+        title: 'Switch your Instagram to a Business account',
+        detail: 'In the Instagram app: Settings → Account type and tools → Switch to professional account → choose Business.',
+      },
+      {
+        title: 'Link that Instagram account to your Facebook Page',
+        detail: 'Still in Instagram Settings → Account → Linked accounts → Facebook → connect it to the Page you just created.',
+      },
+      {
+        title: 'Come back here and click Connect',
+        detail: "You'll log in with your Facebook account, and Relay will find and connect the Instagram account linked to your Page.",
+      },
+    ],
   },
   {
     id: 'x',
@@ -51,6 +74,18 @@ export const PLATFORMS: PlatformDef[] = [
     color: 'bg-gray-900',
     platform: 'X' as Platform,
     icon: <XIcon />,
+    comingSoon: true,
+    guideIntro: 'Just your X account is needed — no extra setup required.',
+    guideSteps: [
+      {
+        title: 'Have an X account ready',
+        detail: "Use the X account you want Relay to post from. If you don't have one, create it at x.com.",
+      },
+      {
+        title: 'Come back here and click Connect',
+        detail: "You'll log in with X and approve a short permissions screen so Relay can post on your behalf.",
+      },
+    ],
   },
   {
     id: 'linkedin',
@@ -59,6 +94,17 @@ export const PLATFORMS: PlatformDef[] = [
     color: 'bg-blue-700',
     platform: 'LinkedIn' as Platform,
     icon: <LinkedInIcon />,
+    guideIntro: 'Just your personal LinkedIn account is needed — no extra setup required.',
+    guideSteps: [
+      {
+        title: 'Have a LinkedIn account ready',
+        detail: 'Use the LinkedIn account you want Relay to post from.',
+      },
+      {
+        title: 'Come back here and click Connect',
+        detail: "You'll log in with LinkedIn and approve a short permissions screen so Relay can post on your behalf.",
+      },
+    ],
   },
   {
     id: 'facebook',
@@ -67,6 +113,21 @@ export const PLATFORMS: PlatformDef[] = [
     color: 'bg-blue-600',
     platform: 'Facebook' as Platform,
     icon: <FacebookIcon />,
+    guideIntro: "You'll need a Facebook Page — not just a personal profile — to connect here.",
+    guideSteps: [
+      {
+        title: 'Create a Facebook Page for your business',
+        detail: "On Facebook, go to Pages → Create new Page, if you don't already have one.",
+      },
+      {
+        title: "Make sure you're an admin on the Page",
+        detail: 'You need admin access on the Page so Relay is allowed to post on its behalf.',
+      },
+      {
+        title: 'Come back here and click Connect',
+        detail: "Log in with the Facebook account that manages the Page, then select that Page when Facebook asks which one to allow.",
+      },
+    ],
   },
   {
     id: 'tiktok',
@@ -75,5 +136,17 @@ export const PLATFORMS: PlatformDef[] = [
     color: 'bg-gray-950',
     platform: 'TikTok' as Platform,
     icon: <TikTokIcon />,
+    comingSoon: true,
+    guideIntro: 'Just your TikTok account is needed — no extra setup required.',
+    guideSteps: [
+      {
+        title: 'Have a TikTok account ready',
+        detail: "Use the TikTok account you want Relay to post from. If you don't have one, create it in the TikTok app.",
+      },
+      {
+        title: 'Come back here and click Connect',
+        detail: "You'll log in with TikTok and approve a short permissions screen so Relay can upload and publish videos on your behalf.",
+      },
+    ],
   },
 ];

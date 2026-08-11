@@ -22,12 +22,13 @@ export interface Post {
   createdAt: string;
   updatedAt: string;
   targets: PostTarget[];
-  media: Array<{ id: string; url: string; filename: string }>;
+  media: Array<{ id: string; url: string; filename: string; mimeType: string }>;
 }
 
 export interface CreatePostDto {
   title: string;
   scheduledAt?: string;
+  mediaIds?: string[];
   targets?: Array<{ accountId: string; caption: string; hashtags?: string }>;
 }
 

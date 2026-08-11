@@ -2,7 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { api, ApiError } from '@/lib/api';
+import { useBrandStore } from '@/store/brand';
+
+interface Brand { id: string; name: string; colorHex: string; slug: string; [key: string]: unknown; }
 
 const BRAND_COLORS = [
   { label: 'Indigo',  bg: 'bg-indigo-500',  hex: '#6366F1' },
@@ -17,15 +22,28 @@ const BRAND_COLORS = [
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const addBrand = useBrandStore((s) => s.addBrand);
   const [name, setName] = useState('');
   const [selectedColor, setSelectedColor] = useState(BRAND_COLORS[0]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const initials = name.trim().slice(0, 2).toUpperCase() || '?';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    router.push('/onboarding/accounts');
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setError('');
+    setSubmitting(true);
+    try {
+      const brand = await api.post<Brand>('/brands', { name: trimmed, colorHex: selectedColor.hex });
+      addBrand(brand as any);
+      router.push('/onboarding/accounts');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to create brand. Please try again.');
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -113,15 +131,21 @@ export default function OnboardingPage() {
             </div>
           </div>
 
+          {error && (
+            <div className="mx-6 mb-3 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-xs font-medium text-red-700">{error}</p>
+            </div>
+          )}
+
           {/* Footer */}
           <div className="flex items-center justify-between px-6 py-3 bg-gray-50 border-t border-gray-100">
             <p className="text-[11px] text-gray-400 font-medium">Step 1 of 2</p>
             <button
               type="submit"
-              disabled={!name.trim()}
-              className="btn-clay-primary h-8 px-4 text-xs font-semibold gap-1"
+              disabled={!name.trim() || submitting}
+              className="btn-clay-primary h-8 px-4 text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Continue →
+              {submitting ? <><Loader2 size={12} className="animate-spin" /> Creating…</> : 'Continue →'}
             </button>
           </div>
         </form>

@@ -26,8 +26,6 @@ interface MediaItem {
   sizeBytes: number;
   uploadedAt: string;
   url: string;
-  gradient: string;
-  accent: string;
 }
 
 interface BackendMedia {
@@ -41,24 +39,6 @@ interface BackendMedia {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const GRADIENTS = [
-  'from-orange-400 to-orange-600', 'from-pink-400 to-rose-600',
-  'from-amber-300 to-orange-500',  'from-emerald-400 to-teal-600',
-  'from-sky-400 to-blue-600',      'from-gray-700 to-gray-900',
-  'from-yellow-300 to-pink-500',   'from-teal-400 to-cyan-600',
-  'from-rose-300 to-red-500',      'from-lime-400 to-green-600',
-];
-const ACCENTS = [
-  'bg-orange-200', 'bg-pink-200', 'bg-amber-200', 'bg-emerald-200',
-  'bg-sky-200',    'bg-gray-400', 'bg-yellow-200', 'bg-teal-200',
-  'bg-rose-200',   'bg-lime-200',
-];
-
-function hashId(id: string): number {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return h;
-}
 
 function mimeToType(mime: string): MediaType {
   if (mime.startsWith('video/')) return 'video';
@@ -82,13 +62,10 @@ function fmtDate(iso: string): string {
 }
 
 function mapMedia(m: BackendMedia): MediaItem {
-  const h = hashId(m.id);
   return {
     id: m.id, name: m.filename, type: mimeToType(m.mimeType),
     size: fmtSize(m.sizeBytes), sizeBytes: m.sizeBytes, url: m.url,
     uploadedAt: fmtDate(m.createdAt),
-    gradient: GRADIENTS[h % GRADIENTS.length],
-    accent:   ACCENTS[h % ACCENTS.length],
   };
 }
 
@@ -97,23 +74,36 @@ function mapMedia(m: BackendMedia): MediaItem {
 const TYPE_ICON: Record<MediaType, typeof ImageIcon> = { image: ImageIcon, video: Film, gif: FileImage };
 const TYPE_LABEL: Record<MediaType, string> = { image: 'Image', video: 'Video', gif: 'GIF' };
 
-// ─── Media thumbnail (gradient placeholder) ───────────────────────────────────
+// ─── Media thumbnail ──────────────────────────────────────────────────────────
 
 function MediaThumb({ item, size = 'md' }: { item: MediaItem; size?: 'sm' | 'md' | 'lg' }) {
   const Icon = TYPE_ICON[item.type];
   const dim = { sm: 'h-20', md: 'h-44', lg: 'h-64' }[size];
+  const isVideo = item.type === 'video';
+
   return (
-    <div className={cn('w-full rounded-lg overflow-hidden bg-gradient-to-br flex items-center justify-center relative', dim, item.gradient)}>
-      <div className="flex flex-col items-center gap-2 opacity-30">
-        <div className={cn('rounded-lg', item.accent, size === 'sm' ? 'w-6 h-6' : 'w-10 h-10')} />
-        {size !== 'sm' && <div className={cn('rounded w-16 h-2', item.accent)} />}
-        {size !== 'sm' && <div className={cn('rounded w-10 h-2', item.accent)} />}
-      </div>
-      <div className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm rounded text-white text-[10px] font-semibold">
+    <div className={cn('w-full rounded-lg overflow-hidden flex items-center justify-center relative bg-gray-100', dim)}>
+      {isVideo ? (
+        <video
+          src={item.url}
+          className="w-full h-full object-cover"
+          preload="metadata"
+          muted
+        />
+      ) : (
+        <img
+          src={item.url}
+          alt={item.name}
+          className="w-full h-full object-cover"
+        />
+      )}
+      {/* Type badge */}
+      <div className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/50 backdrop-blur-sm rounded text-white text-[10px] font-semibold">
         <Icon size={9} />{TYPE_LABEL[item.type]}
       </div>
-      {item.type === 'video' && (
-        <div className="absolute inset-0 flex items-center justify-center">
+      {/* Video play overlay */}
+      {isVideo && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
             <div className="w-0 h-0 border-t-[6px] border-b-[6px] border-l-[10px] border-transparent border-l-white ml-1" />
           </div>
@@ -131,7 +121,11 @@ function PreviewModal({ item, onClose }: { item: MediaItem; onClose: () => void 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl mx-4 bg-white rounded-xl overflow-hidden shadow-2xl">
-        <MediaThumb item={item} size="lg" />
+        {item.type === 'video' ? (
+          <video src={item.url} controls className="w-full max-h-72 bg-black object-contain" />
+        ) : (
+          <img src={item.url} alt={item.name} className="w-full max-h-72 object-contain bg-gray-50" />
+        )}
         <div className="p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
@@ -151,7 +145,7 @@ function PreviewModal({ item, onClose }: { item: MediaItem; onClose: () => void 
               className="flex items-center gap-1.5 h-9 px-4 text-[13px] font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
               <Copy size={14} /> Copy URL
             </button>
-            <Link href="/posts/new" onClick={onClose}
+            <Link href={`/posts/new?mediaId=${item.id}`} onClick={onClose}
               className="flex items-center gap-1.5 h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors ml-auto">
               <Send size={13} /> Use in post
             </Link>
@@ -194,13 +188,16 @@ function GridCard({ item, selected, onToggle, onPreview, onDelete }: {
             <MoreHorizontal size={13} />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-full mt-1 z-30 w-36 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+            <div className="absolute right-0 top-full mt-1 z-30 w-40 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
               <button onClick={() => { onPreview(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50">
                 <Eye size={12} className="text-gray-400" /> Preview
               </button>
               <a href={item.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50">
                 <Download size={12} className="text-gray-400" /> Download
               </a>
+              <Link href={`/posts/new?mediaId=${item.id}`} className="flex items-center gap-2 w-full px-3 py-2 text-[12px] text-orange-600 hover:bg-orange-50">
+                <Send size={12} /> Use in post
+              </Link>
               <div className="my-1 h-px bg-gray-100" />
               <button onClick={() => { onDelete(); setMenuOpen(false); }} className="flex items-center gap-2 w-full px-3 py-2 text-[12px] text-red-600 hover:bg-red-50">
                 <Trash2 size={12} /> Delete
@@ -225,8 +222,12 @@ function ListRow({ item, selected, onToggle, onPreview, onDelete }: {
       selected ? 'bg-orange-50/50' : 'hover:bg-gray-50/70')}>
       <input type="checkbox" checked={selected} onChange={onToggle}
         className="w-4 h-4 rounded border-gray-300 accent-orange-500 cursor-pointer shrink-0" />
-      <div onClick={onPreview}
-        className={cn('w-10 h-10 rounded-lg flex-shrink-0 bg-gradient-to-br cursor-pointer', item.gradient)} />
+      <div onClick={onPreview} className="w-10 h-10 rounded-lg flex-shrink-0 overflow-hidden bg-gray-100 cursor-pointer">
+        {item.type === 'video'
+          ? <video src={item.url} className="w-full h-full object-cover" preload="metadata" muted />
+          : <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+        }
+      </div>
       <div className="flex-1 min-w-0">
         <p className="text-[13px] font-medium text-gray-800 truncate">{item.name}</p>
       </div>
@@ -240,6 +241,9 @@ function ListRow({ item, selected, onToggle, onPreview, onDelete }: {
         <button onClick={onPreview} className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
           <Eye size={13} />
         </button>
+        <Link href={`/posts/new?mediaId=${item.id}`} className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 transition-colors">
+          <Send size={13} />
+        </Link>
         <button onClick={onDelete} className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
           <Trash2 size={13} />
         </button>

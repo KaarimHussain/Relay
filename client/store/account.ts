@@ -7,6 +7,7 @@ export type Platform = 'Instagram' | 'LinkedIn' | 'X' | 'Facebook' | 'TikTok';
 export interface SocialAccount {
   id: string;
   platform: Platform;
+  platformUserId: string;
   platformHandle: string;
   status: AccountStatus;
   tokenExpiresAt: string | null;

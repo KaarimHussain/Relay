@@ -132,7 +132,7 @@ export function PostTable() {
               {recent.map((post) => {
                 const isSelected = selected.has(post.id);
                 const cfg = STATUS_CONFIG[post.status] ?? STATUS_CONFIG.Draft;
-                const platforms = [...new Set(post.targets.map((t) => t.account.platform))];
+                const platforms = [...new Set(post.targets.map((t) => t.account?.platform).filter(Boolean))];
                 return (
                   <div key={post.id}
                     className={cn('flex items-center px-4 py-2.5 transition-colors group',
@@ -179,7 +179,7 @@ export function PostTable() {
             {recent.map((post) => {
               const isSelected = selected.has(post.id);
               const cfg = STATUS_CONFIG[post.status] ?? STATUS_CONFIG.Draft;
-              const platforms = [...new Set(post.targets.map((t) => t.account.platform))];
+              const platforms = [...new Set(post.targets.map((t) => t.account?.platform).filter(Boolean))];
               return (
                 <div key={post.id}
                   className={cn('flex items-start gap-3 px-4 py-3 transition-colors', isSelected ? 'bg-orange-50/50' : '')}>

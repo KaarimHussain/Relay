@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -34,5 +34,10 @@ export class AnalyticsController {
   @Get('posts/:postId')
   postBreakdown(@Param('brandId') brandId: string, @Param('postId') postId: string) {
     return this.analytics.postBreakdown(brandId, postId);
+  }
+
+  @Post('collect')
+  collect(@Param('brandId') brandId: string) {
+    return this.analytics.collectForBrand(brandId);
   }
 }

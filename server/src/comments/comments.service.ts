@@ -146,12 +146,13 @@ export class CommentsService {
 
   // ── List comments ────────────────────────────────────────────────────────────
 
-  async listComments(brandId: string, platform?: string, targetId?: string) {
+  async listComments(brandId: string, platform?: string, targetId?: string, postId?: string) {
     return this.prisma.comment.findMany({
       where: {
         brandId,
         ...(platform ? { platform: platform as Platform } : {}),
         ...(targetId ? { targetId } : {}),
+        ...(postId ? { target: { postId } } : {}),
         isReply: false,
       },
       include: {

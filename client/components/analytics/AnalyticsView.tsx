@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { TrendingUp, Eye, Heart, Users, Zap, AlertCircle, Loader2, Lightbulb, Info } from 'lucide-react';
+import { TrendingUp, Eye, Heart, Users, Zap, AlertCircle, Loader2, Lightbulb, Info, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/store/brand';
 import { api, ApiError } from '@/lib/api';
@@ -200,6 +200,9 @@ export function AnalyticsView() {
   const [loading, setLoading] = useState(false);
   const [chartLoading, setChartLoading] = useState(false);
   const [error, setError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   const activeBrand = useBrandStore((s) => s.activeBrand());
 
@@ -214,7 +217,7 @@ export function AnalyticsView() {
       .then(setOverview)
       .catch(err => setError(err instanceof ApiError ? err.message : 'Failed to load analytics'))
       .finally(() => setLoading(false));
-  }, [activeBrand?.id, period]);
+  }, [activeBrand?.id, period, refreshTick]);
 
   // Fetch time-series for chart
   useEffect(() => {
@@ -229,7 +232,29 @@ export function AnalyticsView() {
       .then(setTimeSeries)
       .catch(() => setTimeSeries([]))
       .finally(() => setChartLoading(false));
-  }, [activeBrand?.id, period, activeMetric]);
+  }, [activeBrand?.id, period, activeMetric, refreshTick]);
+
+  // Pull fresh insights from the platforms on demand, then reload.
+  const handleRefresh = async () => {
+    if (!activeBrand || refreshing) return;
+    setRefreshing(true);
+    setSyncMsg(null);
+    try {
+      const r = await api.post<{ collected: number; targets: number; errors: string[]; message?: string }>(
+        `/brands/${activeBrand.id}/analytics/collect`, {}
+      );
+      setSyncMsg(
+        r.message ??
+        `Collected fresh data from ${r.collected} of ${r.targets} post target${r.targets !== 1 ? 's' : ''}.` +
+        (r.errors.length ? ` ${r.errors.length} error${r.errors.length !== 1 ? 's' : ''}.` : '')
+      );
+      setRefreshTick(t => t + 1);
+    } catch (e) {
+      setSyncMsg(e instanceof ApiError ? e.message : 'Refresh failed');
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const chartValues = useMemo(() => timeSeries.map(d => d.value), [timeSeries]);
   const labels = useMemo(() => timeSeries.map(d => {
@@ -323,10 +348,28 @@ export function AnalyticsView() {
             </button>
           ))}
         </div>
-        {loading && <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-          <Loader2 size={12} className="animate-spin" /> Loading…
-        </div>}
+        <div className="flex items-center gap-2.5">
+          {loading && <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+            <Loader2 size={12} className="animate-spin" /> Loading…
+          </div>}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="Pull the latest reach & engagement from Facebook / Instagram now"
+            className="btn-clay-secondary h-7 px-3 text-[11px] font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? 'Refreshing…' : 'Refresh data'}
+          </button>
+        </div>
       </div>
+
+      {syncMsg && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+          <Info size={12} className="text-gray-400 shrink-0" />
+          <p className="text-[11.5px] text-gray-600">{syncMsg}</p>
+        </div>
+      )}
 
       {/* Error */}
       {error && (

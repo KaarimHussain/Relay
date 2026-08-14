@@ -23,7 +23,6 @@ interface LinkedInPending {
 
 @Injectable()
 export class OAuthService {
-  // In-memory state store — fine for single-instance; replace with Redis for multi-instance
   private readonly states = new Map<string, OAuthState>();
   private readonly linkedinPending = new Map<string, LinkedInPending>();
 
@@ -31,7 +30,6 @@ export class OAuthService {
     private config: ConfigService,
     private accounts: AccountsService,
   ) {
-    // Clean up expired entries every 5 min
     setInterval(() => {
       const now = Date.now();
       for (const [k, v] of this.states) {
@@ -96,7 +94,7 @@ export class OAuthService {
     const params = new URLSearchParams({
       client_id:     this.config.getOrThrow('FACEBOOK_APP_ID'),
       redirect_uri:  this.callbackUrl('facebook'),
-      scope:         'pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,instagram_manage_insights,instagram_manage_comments',
+      scope:         'pages_show_list,pages_read_engagement,pages_manage_posts,business_management,instagram_basic,instagram_content_publish,instagram_manage_insights,instagram_manage_comments',
       state,
       response_type: 'code',
     });
@@ -109,7 +107,7 @@ export class OAuthService {
       response_type: 'code',
       client_id:     this.config.getOrThrow('LINKEDIN_CLIENT_ID'),
       redirect_uri:  this.callbackUrl('linkedin'),
-      scope:         'openid profile w_member_social r_organization_social w_organization_social',
+      scope:         'openid profile w_member_social',
       state,
     });
     return `https://www.linkedin.com/oauth/v2/authorization?${params}`;
@@ -153,9 +151,10 @@ export class OAuthService {
 
     try {
       switch (platform.toLowerCase()) {
-        case 'facebook':
+        case 'facebook': {
           await this.handleFacebookCallback(code, userId, brandId, stateData.platform);
           break;
+        }
         case 'linkedin': {
           const tempId = await this.handleLinkedInCallback(code, userId, brandId);
           if (tempId !== null) {
@@ -212,42 +211,67 @@ export class OAuthService {
     const llData = await llRes.json() as any;
     const longToken: string = llData.access_token ?? userToken;
 
-    // Get user's Facebook Pages (each page has its own long-lived token)
+    type FbPage = { id: string; name: string; access_token: string; instagram_business_account?: { id: string } };
+
+    // Get pages the user personally manages
     const pagesRes = await fetch(
-      `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${longToken}`
+      `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,instagram_business_account&limit=100&access_token=${longToken}`
     );
     const pagesData = await pagesRes.json() as any;
     if (pagesData.error) throw new Error(pagesData.error.message);
 
-    const pages: Array<{ id: string; name: string; access_token: string; instagram_business_account?: { id: string } }> =
-      pagesData.data ?? [];
+    let pages: FbPage[] = pagesData.data ?? [];
 
-    if (!pages.length) throw new Error('No Facebook Pages found. Create a Page first and try again.');
+    // Fallback: pages managed through Meta Business Portfolio won't appear in me/accounts.
+    // Try fetching them via the Business Management API instead.
+    if (!pages.length) {
+      pages = await this.fetchBusinessPages(longToken);
+    }
+
+    if (!pages.length) {
+      throw new Error(
+        'No Facebook Pages found. Make sure you selected your Page when connecting ' +
+        'and that you are an Admin of the Page.',
+      );
+    }
 
     if (originalPlatform.toLowerCase() === 'instagram') {
-      // ── Instagram flow: only save Instagram Business accounts found on pages ──
+      // ── Instagram flow: fetch Instagram Business account per page ──
       let savedCount = 0;
       for (const page of pages) {
-        if (!page.instagram_business_account?.id) continue;
+        // With the instagram_basic scope granted, me/accounts already returns
+        // instagram_business_account inline. Fall back to a direct page lookup
+        // only if it wasn't included (e.g. field trimmed on the list response).
+        let igId: string | undefined = page.instagram_business_account?.id;
 
-        const igId = page.instagram_business_account.id;
+        if (!igId) {
+          const r = await fetch(
+            `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token || longToken}`
+          );
+          const d = await r.json() as any;
+          igId = d.instagram_business_account?.id;
+        }
+
+        if (!igId) continue;
+
         const igRes = await fetch(
-          `https://graph.facebook.com/v21.0/${igId}?fields=username&access_token=${page.access_token}`
+          `https://graph.facebook.com/v21.0/${igId}?fields=username,name&access_token=${page.access_token || longToken}`
         );
         const igData = await igRes.json() as any;
+        const handle = igData.username ? `@${igData.username}` : (igData.name ?? igId);
         await this.accounts.connect(brandId, {
           platform:       'Instagram',
           platformUserId: igId,
-          platformHandle: `@${igData.username ?? igId}`,
-          accessToken:    page.access_token,
+          platformHandle: handle,
+          accessToken:    page.access_token || longToken,
         });
         savedCount++;
       }
 
       if (savedCount === 0) {
         throw new Error(
-          'No Instagram Business account found linked to your Facebook Pages. ' +
-          'Go to your Facebook Page → Settings → Linked Accounts and connect your Instagram account first, then try again.',
+          'No Instagram Business account found. In your Facebook Page → Settings → Instagram, ' +
+          'connect your Instagram account there first, then try again.',
         );
       }
     } else {
@@ -261,6 +285,30 @@ export class OAuthService {
         });
       }
     }
+  }
+
+  private async fetchBusinessPages(userToken: string): Promise<Array<{ id: string; name: string; access_token: string; instagram_business_account?: { id: string } }>> {
+    const pages: Array<{ id: string; name: string; access_token: string; instagram_business_account?: { id: string } }> = [];
+    try {
+      const bizRes = await fetch(
+        `https://graph.facebook.com/v21.0/me/businesses?fields=id,name&access_token=${userToken}`
+      );
+      const bizData = await bizRes.json() as any;
+      if (bizData.error || !Array.isArray(bizData.data)) return pages;
+
+      for (const business of bizData.data) {
+        try {
+          const pagesRes = await fetch(
+            `https://graph.facebook.com/v21.0/${business.id}/owned_pages?fields=id,name,access_token,instagram_business_account&access_token=${userToken}`
+          );
+          const pData = await pagesRes.json() as any;
+          if (!pData.error && Array.isArray(pData.data)) {
+            pages.push(...pData.data);
+          }
+        } catch { /* skip this business */ }
+      }
+    } catch { /* network error */ }
+    return pages;
   }
 
   // ─── LinkedIn ──────────────────────────────────────────────────────────────
@@ -309,7 +357,6 @@ export class OAuthService {
 
       if (aclRes.ok) {
         const aclData = await aclRes.json() as any;
-        console.log('[LinkedIn ACL]', JSON.stringify(aclData).slice(0, 500));
         const elements: any[] = aclData.elements ?? [];
 
         for (const el of elements) {

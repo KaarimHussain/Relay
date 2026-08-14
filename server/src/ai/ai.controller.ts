@@ -5,6 +5,7 @@ import { GenerateCaptionDto } from './dto/generate-caption.dto';
 import { GenerateIdeasDto } from './dto/generate-ideas.dto';
 import { GenerateHashtagsDto } from './dto/generate-hashtags.dto';
 import { ImproveCaptionDto } from './dto/improve-caption.dto';
+import { CaptionFromImageDto } from './dto/caption-from-image.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { BrandMemberGuard } from '../common/guards/brand-member.guard';
 
@@ -18,6 +19,11 @@ export class AiController {
   @Post('generate-caption')
   generateCaption(@Param('brandId') brandId: string, @Body() dto: GenerateCaptionDto) {
     return this.ai.generateCaption(brandId, dto);
+  }
+
+  @Post('caption-from-image')
+  captionFromImage(@Param('brandId') brandId: string, @Body() dto: CaptionFromImageDto) {
+    return this.ai.captionFromImage(brandId, dto);
   }
 
   @Post('generate-ideas')

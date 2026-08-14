@@ -28,15 +28,38 @@ export async function publishToPlatform(
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
 
-async function graphPost(url: string, body: Record<string, unknown>): Promise<any> {
+// Meta returns these codes for transient / "request too expensive" failures.
+// Code 1 (subcode 99) is the "Please reduce the amount of data… then retry" error;
+// code 2 is a temporary outage. Both are safe to retry.
+const TRANSIENT_META_CODES = new Set([1, 2]);
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function graphPost(url: string, body: Record<string, unknown>, attempt = 0): Promise<any> {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   const data = await res.json() as any;
+
   if (!res.ok || data.error) {
-    throw new Error(data?.error?.message ?? `Graph API error ${res.status}`);
+    const e = data?.error ?? {};
+
+    // Auto-retry transient Meta errors (up to 3 attempts, backing off) — this is
+    // exactly what the "then retry your request" message asks us to do.
+    if (TRANSIENT_META_CODES.has(e.code) && attempt < 2) {
+      await sleep(1500 * (attempt + 1));
+      return graphPost(url, body, attempt + 1);
+    }
+
+    const detail = [
+      e.message ?? `Graph API error ${res.status}`,
+      e.code != null ? `code ${e.code}` : '',
+      e.error_subcode != null ? `subcode ${e.error_subcode}` : '',
+      e.fbtrace_id ? `trace ${e.fbtrace_id}` : '',
+    ].filter(Boolean).join(' · ');
+    throw new Error(detail);
   }
   return data;
 }

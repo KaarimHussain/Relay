@@ -28,7 +28,7 @@ export class PostsService {
           ? { create: dto.targets.map(t => ({ accountId: t.accountId, caption: t.caption, hashtags: t.hashtags })) }
           : undefined,
       },
-      include: { targets: true, media: true },
+      include: { targets: { include: { account: { select: { platform: true, platformHandle: true } } } }, media: true },
     });
     return post;
   }

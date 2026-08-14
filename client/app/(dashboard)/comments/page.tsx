@@ -31,6 +31,12 @@ interface Comment {
   target?: { post?: { title: string } } | null;
 }
 
+interface PostOption {
+  id: string;
+  title: string;
+  status: string;
+}
+
 interface AutoReply {
   id: string;
   platform: string;
@@ -47,6 +53,8 @@ function CommentsTab({ brandId }: { brandId: string }) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [platform, setPlatform] = useState('');
+  const [posts, setPosts] = useState<PostOption[]>([]);
+  const [postId, setPostId] = useState('');
   const [syncResult, setSyncResult] = useState<{ synced: number; targets: number; errors: string[]; message?: string } | null>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -55,15 +63,27 @@ function CommentsTab({ brandId }: { brandId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = platform ? `?platform=${platform}` : '';
+      const qs = new URLSearchParams();
+      if (platform) qs.set('platform', platform);
+      if (postId) qs.set('postId', postId);
+      const params = qs.toString() ? `?${qs.toString()}` : '';
       const data = await api.get<Comment[]>(`/brands/${brandId}/comments${params}`);
       setComments(data);
     } finally {
       setLoading(false);
     }
-  }, [brandId, platform]);
+  }, [brandId, platform, postId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Load the brand's published posts so users can narrow comments to one post
+  useEffect(() => {
+    let active = true;
+    api.get<PostOption[]>(`/brands/${brandId}/posts?status=Published`)
+      .then((data) => { if (active) setPosts(data); })
+      .catch(() => { if (active) setPosts([]); });
+    return () => { active = false; };
+  }, [brandId]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -106,6 +126,26 @@ function CommentsTab({ brandId }: { brandId: string }) {
           <option value="">All platforms</option>
           {PLATFORMS.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
+
+        <select
+          value={postId}
+          onChange={(e) => setPostId(e.target.value)}
+          className="h-8 px-2.5 text-xs bg-white border border-gray-200 rounded-lg text-gray-700 outline-none focus:border-orange-500 max-w-[220px]"
+        >
+          <option value="">All posts</option>
+          {posts.map((p) => (
+            <option key={p.id} value={p.id}>{p.title || 'Untitled post'}</option>
+          ))}
+        </select>
+
+        {(platform || postId) && (
+          <button
+            onClick={() => { setPlatform(''); setPostId(''); }}
+            className="text-[11px] font-semibold text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Clear filters
+          </button>
+        )}
 
         <button
           onClick={handleSync}
@@ -156,9 +196,13 @@ function CommentsTab({ brandId }: { brandId: string }) {
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
           <MessageSquare size={32} className="text-gray-200" />
           <div>
-            <p className="text-sm font-semibold text-gray-500">No comments yet</p>
+            <p className="text-sm font-semibold text-gray-500">
+              {platform || postId ? 'No comments match this filter' : 'No comments yet'}
+            </p>
             <p className="text-xs text-gray-400 mt-0.5">
-              Click "Sync now" to fetch comments from your published posts.
+              {platform || postId
+                ? 'Try clearing the filters or syncing again.'
+                : 'Click "Sync now" to fetch comments from your published posts.'}
             </p>
           </div>
         </div>

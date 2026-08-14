@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Search, SlidersHorizontal, MoreHorizontal, Edit2, Clock,
-  Trash2, Send, Plus, ChevronDown, AlertCircle, Loader2, X,
+  Trash2, Send, Plus, AlertCircle, Loader2, X, ImageIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePostStore, Post, PostStatus } from '@/store/post';
@@ -19,27 +19,54 @@ type FilterStatus = PostStatus | 'all';
 type SortKey = 'date-asc' | 'date-desc';
 
 const STATUS_CONFIG: Record<PostStatus, { label: string; dot: string; bg: string; text: string }> = {
-  Draft:      { label: 'Draft',      dot: 'bg-gray-400',    bg: 'bg-gray-100',   text: 'text-gray-500'    },
-  Scheduled:  { label: 'Scheduled',  dot: 'bg-amber-400',   bg: 'bg-amber-50',   text: 'text-amber-700'   },
-  Publishing: { label: 'Publishing', dot: 'bg-blue-400',    bg: 'bg-blue-50',    text: 'text-blue-700'    },
-  Published:  { label: 'Published',  dot: 'bg-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  Failed:     { label: 'Failed',     dot: 'bg-red-500',     bg: 'bg-red-50',     text: 'text-red-600'     },
+  Draft: { label: 'Draft', dot: 'bg-gray-400', bg: 'bg-gray-100', text: 'text-gray-500' },
+  Scheduled: { label: 'Scheduled', dot: 'bg-amber-400', bg: 'bg-amber-50', text: 'text-amber-700' },
+  Publishing: { label: 'Publishing', dot: 'bg-blue-400', bg: 'bg-blue-50', text: 'text-blue-700' },
+  Published: { label: 'Published', dot: 'bg-emerald-500', bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  Failed: { label: 'Failed', dot: 'bg-red-500', bg: 'bg-red-50', text: 'text-red-600' },
 };
 
-const PLATFORM_CONFIG: Record<string, { abbr: string; color: string }> = {
-  Instagram: { abbr: 'IG', color: 'bg-pink-500'  },
-  X:         { abbr: 'X',  color: 'bg-gray-800'  },
-  LinkedIn:  { abbr: 'LI', color: 'bg-blue-700'  },
-  Facebook:  { abbr: 'FB', color: 'bg-blue-600'  },
-  TikTok:    { abbr: 'TT', color: 'bg-gray-950'  },
+function SvgIcon({ d, viewBox = '0 0 24 24', size = 10, fill = 'currentColor' }: { d: string | React.ReactNode; viewBox?: string; size?: number; fill?: string }) {
+  return (
+    <svg width={size} height={size} viewBox={viewBox} fill={fill} aria-hidden="true">
+      {typeof d === 'string' ? <path d={d} /> : d}
+    </svg>
+  );
+}
+
+const PLATFORM_CONFIG: Record<string, { icon: React.ReactNode; color: string }> = {
+  LinkedIn: {
+    color: 'bg-blue-700',
+    icon: <SvgIcon d={<><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z" /><rect x="2" y="9" width="4" height="12" /><circle cx="4" cy="4" r="2" /></>} />,
+  },
+  Instagram: {
+    color: 'bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400',
+    icon: <SvgIcon fill="none" d={<><rect x="2" y="2" width="20" height="20" rx="5" stroke="white" strokeWidth="2" /><circle cx="12" cy="12" r="4" stroke="white" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.2" fill="white" /></>} />,
+  },
+  X: {
+    color: 'bg-gray-900',
+    icon: <SvgIcon d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.259 5.626L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />,
+  },
+  Facebook: {
+    color: 'bg-blue-600',
+    icon: <SvgIcon d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />,
+  },
+  TikTok: {
+    color: 'bg-gray-950',
+    icon: <SvgIcon d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.19 8.19 0 004.79 1.53V6.77a4.85 4.85 0 01-1.02-.08z" />,
+  },
+  YouTube: {
+    color: 'bg-red-600',
+    icon: <SvgIcon d={<><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" /><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="white" /></>} />,
+  },
 };
 
 const TABS: { key: FilterStatus; label: string }[] = [
-  { key: 'all',       label: 'All'       },
+  { key: 'all', label: 'All' },
   { key: 'Scheduled', label: 'Scheduled' },
   { key: 'Published', label: 'Published' },
-  { key: 'Draft',     label: 'Drafts'    },
-  { key: 'Failed',    label: 'Failed'    },
+  { key: 'Draft', label: 'Drafts' },
+  { key: 'Failed', label: 'Failed' },
 ];
 
 // ─── Row menu ─────────────────────────────────────────────────────────────────
@@ -99,7 +126,7 @@ function QueueRow({
   const [busy, setBusy] = useState(false);
   const cfg = STATUS_CONFIG[post.status];
   const excerpt = post.targets[0]?.caption ?? '—';
-  const platforms = [...new Set(post.targets.map((t) => t.account.platform))];
+  const platforms = [...new Set(post.targets.map((t) => t.account?.platform).filter(Boolean))];
 
   const handlePublishNow = async () => {
     setBusy(true);
@@ -109,67 +136,73 @@ function QueueRow({
   };
 
   return (
-    <div className={cn('flex items-start gap-3 px-4 py-3.5 transition-colors group relative', selected ? 'bg-orange-50/50' : 'hover:bg-gray-50/70')}>
-      <div className="pt-0.5 shrink-0">
-        <input type="checkbox" checked={selected} onChange={onToggle}
-          className="w-4 h-4 rounded border-gray-300 accent-orange-500 cursor-pointer" />
-      </div>
+    <div className={cn('flex items-center gap-2.5 px-4 py-2 transition-colors group relative', selected ? 'bg-orange-50/50' : 'hover:bg-gray-50/70')}>
+      <input type="checkbox" checked={selected} onChange={onToggle}
+        className="w-3.5 h-3.5 rounded border-gray-300 accent-orange-500 cursor-pointer shrink-0" />
 
       {/* Media thumbnail */}
-      <div className={cn('w-10 h-10 rounded-lg shrink-0 flex items-center justify-center border border-gray-100', post.media.length ? 'bg-orange-50' : 'bg-gray-50')}>
-        {post.media.length
-          ? <div className="w-4 h-4 rounded bg-orange-200" />
-          : <div className="text-gray-300 text-[10px] font-bold">Aa</div>}
+      <div className="w-8 h-8 rounded-md shrink-0 overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center">
+        {post.media[0]?.url
+          ? <img src={post.media[0].url} alt="" className="w-full h-full object-cover" />
+          : <ImageIcon size={13} className="text-gray-300" />}
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-medium text-gray-900 truncate leading-snug">{post.title}</p>
-        <p className="text-[12px] text-gray-400 truncate mt-0.5">{excerpt}</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-[13px] font-medium text-gray-900 truncate leading-none">{post.title}</p>
+          <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium shrink-0', cfg.bg, cfg.text)}>
+            <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', cfg.dot)} />
+            {cfg.label}
+          </span>
+        </div>
 
-        <div className="flex items-center gap-3 mt-2 flex-wrap">
-          {/* Platform dots */}
-          <div className="flex -space-x-1">
+        <div className="flex items-center gap-2 mt-1">
+          {/* Platform icons */}
+          <div className="flex -space-x-0.5 shrink-0">
             {platforms.map((p) => {
-              const pcfg = PLATFORM_CONFIG[p] ?? { abbr: p[0], color: 'bg-gray-400' };
+              const pcfg = PLATFORM_CONFIG[p] ?? { icon: <span className="text-[7px] font-bold">{p[0]}</span>, color: 'bg-gray-400' };
               return (
                 <div key={p} title={p}
-                  className={cn('w-5 h-5 rounded-full ring-2 ring-white flex items-center justify-center text-white text-[8px] font-bold', pcfg.color)}>
-                  {pcfg.abbr[0]}
+                  className={cn('w-4 h-4 rounded-full ring-1 ring-white flex items-center justify-center text-white', pcfg.color)}>
+                  {pcfg.icon}
                 </div>
               );
             })}
           </div>
 
-          <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium', cfg.bg, cfg.text)}>
-            <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', cfg.dot)} />
-            {cfg.label}
-          </span>
+          <p className="text-[11px] text-gray-400 truncate">{excerpt}</p>
 
-          <span className="text-[12px] text-gray-400 flex items-center gap-1">
-            <Clock size={11} className="text-gray-300" />
+          <span className="text-[11px] text-gray-400 flex items-center gap-1 shrink-0 ml-auto">
+            <Clock size={10} className="text-gray-300" />
             {formatScheduledAt(post.scheduledAt)}
           </span>
         </div>
 
-        {/* Failed error message */}
+        {/* Failed error message — one line per platform that failed */}
         {post.status === 'Failed' && post.targets.some((t) => t.errorMessage) && (
-          <p className="text-[11px] text-red-500 mt-1.5 truncate">
-            {post.targets.find((t) => t.errorMessage)?.errorMessage}
-          </p>
+          <div className="mt-0.5 flex flex-col gap-0.5">
+            {post.targets
+              .filter((t) => t.errorMessage)
+              .map((t) => (
+                <p key={t.id} className="text-[11px] text-red-500 truncate" title={t.errorMessage ?? ''}>
+                  <span className="font-semibold">{t.account?.platform ?? 'Platform'}:</span> {t.errorMessage}
+                </p>
+              ))}
+          </div>
         )}
       </div>
 
       {/* Row actions */}
-      <div className="relative shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
+      <div className="relative shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         {(post.status === 'Draft' || post.status === 'Failed') && (
           <button disabled={busy} onClick={handlePublishNow}
-            className="h-7 px-2.5 text-[11px] font-medium text-orange-600 bg-orange-50 border border-orange-100 rounded-md hover:bg-orange-100 transition-colors disabled:opacity-50">
+            className="h-6 px-2 text-[11px] font-medium text-orange-600 bg-orange-50 border border-orange-100 rounded-md hover:bg-orange-100 transition-colors disabled:opacity-50">
             {busy ? '…' : post.status === 'Failed' ? 'Retry' : 'Publish'}
           </button>
         )}
         <button onClick={() => setMenuOpen((v) => !v)}
-          className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
-          <MoreHorizontal size={15} />
+          className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+          <MoreHorizontal size={14} />
         </button>
         {menuOpen && <RowMenu post={post} brandId={brandId} onClose={() => setMenuOpen(false)} />}
       </div>
@@ -181,12 +214,12 @@ function QueueRow({
 
 function EmptyState({ tab }: { tab: FilterStatus }) {
   const messages: Record<FilterStatus, { title: string; body: string }> = {
-    all:       { title: 'Your queue is empty',    body: 'Create your first post to get started.'         },
-    Scheduled: { title: 'No scheduled posts',      body: 'Schedule a post and it will appear here.'       },
-    Published: { title: 'No published posts yet',  body: 'Published posts will show up here.'             },
-    Draft:     { title: 'No drafts',               body: 'Save a post as a draft to revisit it later.'    },
-    Failed:    { title: 'No failed posts',          body: 'Any posts that fail to publish appear here.'    },
-    Publishing:{ title: 'Nothing publishing',       body: 'Posts being published will appear here.'        },
+    all: { title: 'Your queue is empty', body: 'Create your first post to get started.' },
+    Scheduled: { title: 'No scheduled posts', body: 'Schedule a post and it will appear here.' },
+    Published: { title: 'No published posts yet', body: 'Published posts will show up here.' },
+    Draft: { title: 'No drafts', body: 'Save a post as a draft to revisit it later.' },
+    Failed: { title: 'No failed posts', body: 'Any posts that fail to publish appear here.' },
+    Publishing: { title: 'Nothing publishing', body: 'Posts being published will appear here.' },
   };
   const { title, body } = messages[tab] ?? messages.all;
   return (
@@ -293,7 +326,7 @@ export function QueueView() {
   }
 
   return (
-    <div className="flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden">
+    <div className="flex flex-col bg-white border border-gray-200 rounded-xl">
       {/* Tabs */}
       <div className="flex items-center gap-0.5 px-4 pt-3 border-b border-gray-200 overflow-x-auto scrollbar-none">
         {TABS.map(({ key, label }) => (
@@ -354,13 +387,11 @@ export function QueueView() {
 
       {/* Column header */}
       {filtered.length > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 border-b border-gray-100">
-          <div className="w-4 shrink-0">
-            <input type="checkbox" checked={allSelected} onChange={toggleAll}
-              ref={(el) => { if (el) el.indeterminate = someSelected; }}
-              className="w-4 h-4 rounded border-gray-300 accent-orange-500 cursor-pointer" />
-          </div>
-          <div className="w-10 shrink-0" />
+        <div className="flex items-center gap-2.5 px-4 py-1.5 bg-gray-50 border-b border-gray-100">
+          <input type="checkbox" checked={allSelected} onChange={toggleAll}
+            ref={(el) => { if (el) el.indeterminate = someSelected; }}
+            className="w-3.5 h-3.5 rounded border-gray-300 accent-orange-500 cursor-pointer shrink-0" />
+          <div className="w-8 shrink-0" />
           <span className="flex-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Post</span>
         </div>
       )}
@@ -369,11 +400,11 @@ export function QueueView() {
       {filtered.length === 0
         ? <EmptyState tab={activeTab} />
         : <div className="divide-y divide-gray-100">
-            {filtered.map((post) => (
-              <QueueRow key={post.id} post={post} brandId={activeBrand.id}
-                selected={selected.has(post.id)} onToggle={() => toggleRow(post.id)} />
-            ))}
-          </div>
+          {filtered.map((post) => (
+            <QueueRow key={post.id} post={post} brandId={activeBrand.id}
+              selected={selected.has(post.id)} onToggle={() => toggleRow(post.id)} />
+          ))}
+        </div>
       }
 
       {/* Footer */}

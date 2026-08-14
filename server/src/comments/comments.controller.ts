@@ -18,8 +18,9 @@ export class CommentsController {
     @Param('brandId') brandId: string,
     @Query('platform') platform?: string,
     @Query('targetId') targetId?: string,
+    @Query('postId') postId?: string,
   ) {
-    return this.comments.listComments(brandId, platform, targetId);
+    return this.comments.listComments(brandId, platform, targetId, postId);
   }
 
   @Post('sync')

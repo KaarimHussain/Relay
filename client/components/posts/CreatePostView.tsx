@@ -318,6 +318,27 @@ export function CreatePostView() {
     }
   };
 
+  // Generate a caption by reading the uploaded image (images only, no video)
+  const handleGenerateFromImage = async () => {
+    if (!activeBrand) return;
+    const image = mediaImages[0];
+    if (!image) { toast('Add an image first', 'error'); return; }
+    setIsAiLoading(true);
+    try {
+      const { caption: generated, hashtags } = await api.post<{ caption: string; hashtags: string[] }>(
+        `/brands/${activeBrand.id}/ai/caption-from-image`,
+        { imageUrl: image.url, platform: previewPlatform },
+      );
+      const tags = hashtags?.length ? `\n\n${hashtags.join(' ')}` : '';
+      setCaption(generated + tags);
+      toast('Caption generated from your image', 'sparkle');
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Could not generate caption from image', 'error');
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!activeBrand) return;
     if (!title.trim()) { setSubmitError('Please enter a title for this post.'); return; }
@@ -501,6 +522,14 @@ export function CreatePostView() {
                 {isAiLoading && <RefreshCw size={12} className="animate-spin text-orange-600" />}
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
+                {hasImages && !hasVideo && (
+                  <button type="button" disabled={isAiLoading}
+                    onClick={handleGenerateFromImage}
+                    title="Write a caption based on what's in your image"
+                    className="btn-clay-primary h-6.5 px-2.5 text-[11px] font-semibold disabled:opacity-50 inline-flex items-center gap-1">
+                    <ImageIcon size={11} /> Caption from image
+                  </button>
+                )}
                 {AI_QUICK_ACTIONS.map((act) => (
                   <button key={act.label} type="button" disabled={isAiLoading}
                     onClick={() => handleAiAction(act.prompt)}

@@ -223,6 +223,60 @@ export class AiService {
     }
   }
 
+  /**
+   * Generates a short, contextual reply to an incoming comment, in the brand's
+   * configured behaviour/tone. Used by the AI auto-reply feature.
+   */
+  async generateCommentReply(
+    brandId: string,
+    opts: { platform: string; commentText: string; authorName?: string; behaviour: string; guidelines: string; niche: string },
+  ): Promise<string> {
+    const brand = await this.prisma.brand.findUniqueOrThrow({ where: { id: brandId } });
+
+    const systemPrompt = [
+      `You are replying, as the brand "${brand.name}", to a comment left on one of its ${opts.platform} posts.`,
+      `Brand niche: ${opts.niche}.`,
+      `Brand guidelines: ${opts.guidelines}.`,
+      `How you should sound (behaviour/tone): ${opts.behaviour}.`,
+      '',
+      'Write a reply DIRECTLY addressing what the commenter actually said — answer their question, react to their point, or thank them specifically.',
+      'Rules:',
+      '- Keep it very short: 1 sentence, 2 at most. This is a comment reply, not a caption.',
+      '- Sound like a real human, never robotic or corporate. No "Thank you for your comment".',
+      '- Do NOT use hashtags. Use at most one emoji, only if it fits.',
+      '- Never invent facts, prices, links, or promises. If they ask something you cannot know, be warm and point them to DMs.',
+      '- Match the behaviour/tone above.',
+      'Return ONLY valid JSON of the exact shape: {"reply": string}. No markdown.',
+    ].join('\n');
+
+    const userPrompt = [
+      opts.authorName ? `Commenter: ${opts.authorName}` : '',
+      `Their comment: "${opts.commentText}"`,
+      'Write the reply.',
+    ].filter(Boolean).join('\n');
+
+    const response = await this.openai.chat.completions.create({
+      model: this.textModel,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) throw new InternalServerErrorException('Empty AI response');
+
+    try {
+      const parsed = JSON.parse(content) as { reply?: string };
+      const reply = (parsed.reply ?? '').trim();
+      if (!reply) throw new Error('no reply');
+      return reply;
+    } catch {
+      throw new InternalServerErrorException('Failed to parse AI reply');
+    }
+  }
+
   async generateHashtags(brandId: string, dto: GenerateHashtagsDto) {
     const brand = await this.prisma.brand.findUniqueOrThrow({ where: { id: brandId } });
     const model = dto.model ?? this.textModel;

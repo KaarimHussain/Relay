@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { BrandMemberGuard } from '../common/guards/brand-member.guard';
 import { CommentsService } from './comments.service';
 import { CreateAutoReplyDto } from './dto/create-auto-reply.dto';
 import { ReplyCommentDto } from './dto/reply-comment.dto';
+import { UpdateCommentAiConfigDto } from './dto/update-comment-ai-config.dto';
 
 @ApiTags('Comments')
 @ApiBearerAuth()
@@ -28,6 +29,11 @@ export class CommentsController {
     return this.comments.syncComments(brandId);
   }
 
+  @Get(':commentId/replies')
+  replies(@Param('brandId') brandId: string, @Param('commentId') commentId: string) {
+    return this.comments.getReplies(brandId, commentId);
+  }
+
   @Post(':commentId/reply')
   reply(
     @Param('brandId') brandId: string,
@@ -35,6 +41,16 @@ export class CommentsController {
     @Body() dto: ReplyCommentDto,
   ) {
     return this.comments.replyToComment(brandId, commentId, dto.text);
+  }
+
+  @Get('ai-config')
+  getAiConfig(@Param('brandId') brandId: string) {
+    return this.comments.getAiConfig(brandId);
+  }
+
+  @Put('ai-config')
+  updateAiConfig(@Param('brandId') brandId: string, @Body() dto: UpdateCommentAiConfigDto) {
+    return this.comments.updateAiConfig(brandId, dto);
   }
 
   @Get('auto-replies')

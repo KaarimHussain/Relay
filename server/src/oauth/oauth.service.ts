@@ -94,7 +94,7 @@ export class OAuthService {
     const params = new URLSearchParams({
       client_id:     this.config.getOrThrow('FACEBOOK_APP_ID'),
       redirect_uri:  this.callbackUrl('facebook'),
-      scope:         'pages_show_list,pages_read_engagement,pages_manage_posts,business_management,instagram_basic,instagram_content_publish,instagram_manage_insights,instagram_manage_comments',
+      scope:         'pages_show_list,pages_read_engagement,pages_read_user_content,pages_manage_posts,pages_manage_engagement,business_management,instagram_basic,instagram_content_publish,instagram_manage_insights,instagram_manage_comments',
       state,
       response_type: 'code',
     });
@@ -239,6 +239,8 @@ export class OAuthService {
       // ── Instagram flow: fetch Instagram Business account per page ──
       let savedCount = 0;
       for (const page of pages) {
+        const pageToken = await this.resolvePageToken(page.id, page.access_token, longToken);
+
         // With the instagram_basic scope granted, me/accounts already returns
         // instagram_business_account inline. Fall back to a direct page lookup
         // only if it wasn't included (e.g. field trimmed on the list response).
@@ -246,7 +248,7 @@ export class OAuthService {
 
         if (!igId) {
           const r = await fetch(
-            `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token || longToken}`
+            `https://graph.facebook.com/v21.0/${page.id}?fields=instagram_business_account&access_token=${pageToken}`
           );
           const d = await r.json() as any;
           igId = d.instagram_business_account?.id;
@@ -255,7 +257,7 @@ export class OAuthService {
         if (!igId) continue;
 
         const igRes = await fetch(
-          `https://graph.facebook.com/v21.0/${igId}?fields=username,name&access_token=${page.access_token || longToken}`
+          `https://graph.facebook.com/v21.0/${igId}?fields=username,name&access_token=${pageToken}`
         );
         const igData = await igRes.json() as any;
         const handle = igData.username ? `@${igData.username}` : (igData.name ?? igId);
@@ -263,7 +265,7 @@ export class OAuthService {
           platform:       'Instagram',
           platformUserId: igId,
           platformHandle: handle,
-          accessToken:    page.access_token || longToken,
+          accessToken:    pageToken,
         });
         savedCount++;
       }
@@ -277,14 +279,36 @@ export class OAuthService {
     } else {
       // ── Facebook flow: save each Facebook Page as a separate account ──
       for (const page of pages) {
+        // Reading a Page's post comments requires a genuine PAGE access token —
+        // a user token yields "(#100) … requires pages_read_engagement". Pages
+        // that come via the Business Portfolio fallback can arrive without a
+        // usable token, so mint one explicitly.
+        const pageToken = await this.resolvePageToken(page.id, page.access_token, longToken);
         await this.accounts.connect(brandId, {
           platform:       'Facebook',
           platformUserId: page.id,
           platformHandle: page.name,
-          accessToken:    page.access_token,
+          accessToken:    pageToken,
         });
       }
     }
+  }
+
+  /**
+   * Returns a guaranteed Page access token. Prefers the token already attached
+   * to the page; otherwise mints one from the (long-lived) user token, which
+   * works whenever the user is an admin of the Page.
+   */
+  private async resolvePageToken(pageId: string, pageToken: string | undefined, userToken: string): Promise<string> {
+    if (pageToken) return pageToken;
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${pageId}?fields=access_token&access_token=${userToken}`
+    );
+    const data = await res.json() as any;
+    if (data.access_token) return data.access_token;
+    // Last resort — the user token at least lets the account be saved; comment
+    // reads may still fail until the user is made a direct Page admin.
+    return userToken;
   }
 
   private async fetchBusinessPages(userToken: string): Promise<Array<{ id: string; name: string; access_token: string; instagram_business_account?: { id: string } }>> {

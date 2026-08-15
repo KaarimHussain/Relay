@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   User, Building2, Bell, CreditCard,
   Camera, Check, AlertTriangle, ChevronRight,
-  Zap, Shield, Loader2, X,
+  Zap, Shield, Loader2, X, Bot, Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -17,7 +17,7 @@ import { api } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'brand' | 'notifications' | 'billing';
+type Tab = 'profile' | 'brand' | 'comments-ai' | 'notifications' | 'billing';
 
 // ─── Shared form primitives ───────────────────────────────────────────────────
 
@@ -606,6 +606,137 @@ function BrandTab() {
   );
 }
 
+// ─── Comments AI tab ──────────────────────────────────────────────────────────
+
+interface CommentAiConfig {
+  isEnabled: boolean;
+  behaviour: string;
+  guidelines: string;
+  niche: string;
+}
+
+function CommentsAiTab() {
+  const { toast } = useToast();
+  const activeBrand = useBrandStore((s) => s.activeBrand());
+
+  const [config, setConfig] = useState<CommentAiConfig | null>(null);
+  const [enabled, setEnabled] = useState(false);
+  const [behaviour, setBehaviour] = useState('');
+  const [savedEnabled, setSavedEnabled] = useState(false);
+  const [savedBehaviour, setSavedBehaviour] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!activeBrand) return;
+    setLoading(true);
+    api.get<CommentAiConfig>(`/brands/${activeBrand.id}/comments/ai-config`)
+      .then((c) => {
+        setConfig(c);
+        setEnabled(c.isEnabled); setSavedEnabled(c.isEnabled);
+        setBehaviour(c.behaviour); setSavedBehaviour(c.behaviour);
+      })
+      .catch(() => toast('Failed to load AI settings', 'error'))
+      .finally(() => setLoading(false));
+  }, [activeBrand?.id]);
+
+  if (!activeBrand) {
+    return <div className="py-16 text-center text-gray-400 text-[13px]">No brand selected. Create a brand first.</div>;
+  }
+  if (loading || !config) {
+    return <div className="flex items-center justify-center py-16 text-gray-400 gap-2"><Loader2 size={16} className="animate-spin" /> Loading…</div>;
+  }
+
+  const dirty = enabled !== savedEnabled || behaviour !== savedBehaviour;
+
+  const save = async () => {
+    if (!dirty) return;
+    setSaving(true);
+    try {
+      const updated = await api.put<CommentAiConfig>(`/brands/${activeBrand.id}/comments/ai-config`, {
+        isEnabled: enabled,
+        behaviour: behaviour.trim() || undefined,
+      });
+      setConfig(updated);
+      setEnabled(updated.isEnabled); setSavedEnabled(updated.isEnabled);
+      setBehaviour(updated.behaviour); setSavedBehaviour(updated.behaviour);
+      toast('AI reply settings saved', 'success');
+    } catch (err: any) {
+      toast(err?.message ?? 'Failed to save', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const discard = () => { setEnabled(savedEnabled); setBehaviour(savedBehaviour); };
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Header / enable toggle */}
+      <div className="flex items-start justify-between gap-4 pb-6 border-b border-gray-100">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+            <Bot size={18} className="text-orange-500" />
+          </div>
+          <div>
+            <p className="text-[15px] font-semibold text-gray-900">AI comment replies</p>
+            <p className="text-[13px] text-gray-400 mt-0.5 max-w-md">
+              When enabled, Relay automatically writes a contextual reply to every new comment on your posts,
+              using the behaviour you define below. Overrides the fixed template rules on the Comments page.
+            </p>
+          </div>
+        </div>
+        <Toggle checked={enabled} onChange={setEnabled} />
+      </div>
+
+      {/* Behaviour — editable */}
+      <Field
+        label="AI behaviour & tone"
+        hint="Describe how the AI should sound when replying. This is the personality of your replies."
+      >
+        <textarea
+          value={behaviour}
+          onChange={(e) => setBehaviour(e.target.value.slice(0, 1000))}
+          placeholder="e.g. Super casual and funny, like texting a witty friend…"
+          rows={4}
+          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors resize-none"
+        />
+        <p className="text-[11px] text-gray-400 text-right -mt-1">{behaviour.length}/1000</p>
+      </Field>
+
+      {/* Static — brand guidelines & niche */}
+      <div className="flex flex-col gap-4 p-4 bg-gray-50/60 border border-gray-100 rounded-xl">
+        <div className="flex items-center gap-1.5 text-[12px] font-medium text-gray-400">
+          <Lock size={12} /> Fixed for now — managed by Relay
+        </div>
+        <Field label="Brand guidelines">
+          <textarea
+            value={config.guidelines}
+            disabled
+            rows={3}
+            className="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-[13px] text-gray-500 outline-none resize-none cursor-not-allowed"
+          />
+        </Field>
+        <Field label="Brand niche">
+          <textarea
+            value={config.niche}
+            disabled
+            rows={2}
+            className="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-[13px] text-gray-500 outline-none resize-none cursor-not-allowed"
+          />
+        </Field>
+      </div>
+
+      <SaveBar dirty={dirty} onSave={save} onDiscard={discard} />
+      {saving && (
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <Loader2 size={13} className="animate-spin" /> Saving…
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Notifications tab ────────────────────────────────────────────────────────
 
 function NotificationsTab() {
@@ -777,6 +908,7 @@ function BillingTab() {
 const TABS: { key: Tab; label: string; icon: typeof User }[] = [
   { key: 'profile',       label: 'Profile',       icon: User        },
   { key: 'brand',         label: 'Brand',         icon: Building2   },
+  { key: 'comments-ai',   label: 'Comments AI',   icon: Bot         },
   { key: 'notifications', label: 'Notifications', icon: Bell        },
   { key: 'billing',       label: 'Billing',       icon: CreditCard  },
 ];
@@ -809,6 +941,7 @@ export function SettingsView() {
       <div className="flex-1 min-w-0">
         {tab === 'profile'       && <ProfileTab />}
         {tab === 'brand'         && <BrandTab />}
+        {tab === 'comments-ai'   && <CommentsAiTab />}
         {tab === 'notifications' && <NotificationsTab />}
         {tab === 'billing'       && <BillingTab />}
       </div>

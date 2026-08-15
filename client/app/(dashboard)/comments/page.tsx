@@ -29,6 +29,15 @@ interface Comment {
   repliedAt: string | null;
   account: { platformHandle: string };
   target?: { post?: { title: string } } | null;
+  _count?: { replies: number };
+}
+
+interface Reply {
+  id: string;
+  authorName: string;
+  text: string;
+  postedAt: string;
+  account: { platform: string; platformHandle: string };
 }
 
 interface PostOption {
@@ -55,10 +64,34 @@ function CommentsTab({ brandId }: { brandId: string }) {
   const [platform, setPlatform] = useState('');
   const [posts, setPosts] = useState<PostOption[]>([]);
   const [postId, setPostId] = useState('');
-  const [syncResult, setSyncResult] = useState<{ synced: number; targets: number; errors: string[]; message?: string } | null>(null);
+  const [syncResult, setSyncResult] = useState<{ synced: number; targets: number; skipped?: number; errors: string[]; message?: string } | null>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
+  // Lazily-loaded reply threads, keyed by comment id.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [repliesById, setRepliesById] = useState<Record<string, Reply[]>>({});
+  const [loadingReplies, setLoadingReplies] = useState<Set<string>>(new Set());
+
+  const toggleReplies = useCallback(async (commentId: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(commentId) ? next.delete(commentId) : next.add(commentId);
+      return next;
+    });
+    // Fetch on first expand only — avoids pulling every thread up front.
+    if (!repliesById[commentId] && !loadingReplies.has(commentId)) {
+      setLoadingReplies((s) => new Set(s).add(commentId));
+      try {
+        const data = await api.get<Reply[]>(`/brands/${brandId}/comments/${commentId}/replies`);
+        setRepliesById((m) => ({ ...m, [commentId]: data }));
+      } catch {
+        setRepliesById((m) => ({ ...m, [commentId]: [] }));
+      } finally {
+        setLoadingReplies((s) => { const n = new Set(s); n.delete(commentId); return n; });
+      }
+    }
+  }, [brandId, repliesById, loadingReplies]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,7 +122,7 @@ function CommentsTab({ brandId }: { brandId: string }) {
     setSyncing(true);
     setSyncResult(null);
     try {
-      const result = await api.post<{ synced: number; targets: number; errors: string[]; message?: string }>(
+      const result = await api.post<{ synced: number; targets: number; skipped?: number; errors: string[]; message?: string }>(
         `/brands/${brandId}/comments/sync`, {}
       );
       setSyncResult(result);
@@ -106,6 +139,13 @@ function CommentsTab({ brandId }: { brandId: string }) {
       await api.post(`/brands/${brandId}/comments/${commentId}/reply`, { text: replyText.trim() });
       setReplyingTo(null);
       setReplyText('');
+      // The reply is stored server-side immediately — re-fetch the thread and
+      // keep it expanded so the new reply shows without waiting for a sync.
+      setExpanded((s) => new Set(s).add(commentId));
+      try {
+        const fresh = await api.get<Reply[]>(`/brands/${brandId}/comments/${commentId}/replies`);
+        setRepliesById((m) => ({ ...m, [commentId]: fresh }));
+      } catch {}
       await load();
     } catch (err: any) {
       alert(err.message ?? 'Reply failed');
@@ -157,7 +197,7 @@ function CommentsTab({ brandId }: { brandId: string }) {
         </button>
 
         <p className="text-[11px] text-gray-400 ml-auto">
-          Syncs automatically every 30 min
+          Syncs automatically every 30 seconds
         </p>
       </div>
 
@@ -171,10 +211,13 @@ function CommentsTab({ brandId }: { brandId: string }) {
               : 'bg-amber-50 border border-amber-100 text-amber-700'
           )}>
             <span className="font-semibold">
-              {syncResult.message
+              {syncResult.targets === 0 && syncResult.message
                 ? syncResult.message
                 : `Synced ${syncResult.synced} comment${syncResult.synced !== 1 ? 's' : ''} across ${syncResult.targets} post target${syncResult.targets !== 1 ? 's' : ''}.`}
             </span>
+            {!!syncResult.skipped && syncResult.skipped > 0 && (
+              <span className="text-gray-500">{syncResult.skipped} deleted post{syncResult.skipped !== 1 ? 's' : ''} skipped.</span>
+            )}
             {syncResult.errors.length > 0 && (
               <span className="text-amber-600">{syncResult.errors.length} error{syncResult.errors.length !== 1 ? 's' : ''}.</span>
             )}
@@ -207,41 +250,60 @@ function CommentsTab({ brandId }: { brandId: string }) {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {comments.map((c) => (
-            <div key={c.id} className="bg-white border border-gray-100 rounded-xl p-4 flex flex-col gap-2.5 shadow-2xs">
-              {/* Header */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0', PLATFORM_COLORS[c.platform] ?? 'bg-gray-400')}>
-                    {c.platform[0]}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-gray-900">{c.authorName}</p>
-                    <p className="text-[10px] text-gray-400">
-                      {c.platform} · {c.account.platformHandle}
-                      {c.target?.post && <> · <span className="text-gray-500">{c.target.post.title}</span></>}
-                    </p>
-                  </div>
+        <div className="flex flex-col gap-1.5">
+          {comments.map((c) => {
+            const replyCount = c._count?.replies ?? 0;
+            const isOpen = expanded.has(c.id);
+            const replies = repliesById[c.id];
+            return (
+            <div key={c.id} className="bg-white border border-gray-100 rounded-lg px-3 py-2.5 flex flex-col gap-1.5 shadow-2xs">
+              {/* Header row — avatar, author + inline meta, timestamp */}
+              <div className="flex items-center gap-2">
+                <div className={cn('w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0', PLATFORM_COLORS[c.platform] ?? 'bg-gray-400')}>
+                  {c.platform[0]}
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <p className="text-xs font-bold text-gray-900 shrink-0">{c.authorName}</p>
+                <p className="text-[10px] text-gray-400 truncate min-w-0">
+                  {c.platform} · {c.account.platformHandle}
+                  {c.target?.post && <> · <span className="text-gray-500">{c.target.post.title}</span></>}
+                </p>
+                <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                   {c.autoReplied && (
                     <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100">
                       <Bot size={9} /> Auto-replied
                     </span>
                   )}
-                  <span className="text-[10px] text-gray-400">
-                    {new Date(c.postedAt).toLocaleDateString()}
-                  </span>
+                  <span className="text-[10px] text-gray-400">{new Date(c.postedAt).toLocaleDateString()}</span>
                 </div>
               </div>
 
               {/* Comment text */}
-              <p className="text-sm text-gray-700 leading-relaxed">{c.text}</p>
+              <p className="text-[13px] text-gray-700 leading-snug pl-8">{c.text}</p>
 
-              {/* Reply area */}
-              {replyingTo === c.id ? (
-                <div className="flex gap-2 mt-1">
+              {/* Actions row — reply + replies toggle */}
+              <div className="flex items-center gap-3 pl-8">
+                {replyingTo !== c.id && (
+                  <button
+                    onClick={() => { setReplyingTo(c.id); setReplyText(''); }}
+                    className="text-[11px] font-semibold text-orange-600 hover:text-orange-700 transition-colors"
+                  >
+                    Reply
+                  </button>
+                )}
+                {replyCount > 0 && (
+                  <button
+                    onClick={() => toggleReplies(c.id)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    <ChevronDown size={12} className={cn('transition-transform', isOpen && 'rotate-180')} />
+                    {isOpen ? 'Hide' : 'View'} {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
+                  </button>
+                )}
+              </div>
+
+              {/* Inline reply composer */}
+              {replyingTo === c.id && (
+                <div className="flex gap-2 pl-8">
                   <input
                     autoFocus
                     type="text"
@@ -265,16 +327,33 @@ function CommentsTab({ brandId }: { brandId: string }) {
                     Cancel
                   </button>
                 </div>
-              ) : (
-                <button
-                  onClick={() => { setReplyingTo(c.id); setReplyText(''); }}
-                  className="self-start text-[11px] font-semibold text-orange-600 hover:text-orange-700 transition-colors"
-                >
-                  Reply
-                </button>
+              )}
+
+              {/* Replies dropdown (lazy) */}
+              {isOpen && (
+                <div className="ml-8 mt-0.5 pl-3 border-l-2 border-gray-100 flex flex-col gap-2">
+                  {loadingReplies.has(c.id) ? (
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-400 py-1">
+                      <Loader2 size={11} className="animate-spin" /> Loading replies…
+                    </div>
+                  ) : replies && replies.length > 0 ? (
+                    replies.map((r) => (
+                      <div key={r.id} className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-semibold text-gray-800">{r.authorName}</span>
+                          <span className="text-[9px] text-gray-400">{new Date(r.postedAt).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-[12px] text-gray-600 leading-snug">{r.text}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[11px] text-gray-400 py-1">No replies to show.</p>
+                  )}
+                </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

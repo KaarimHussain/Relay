@@ -75,6 +75,7 @@ model Brand {
   templates    Template[]
   comments     Comment[]
   autoReplies  AutoReply[]
+  commentAiConfig CommentAiConfig?
 }
 
 model Template {
@@ -183,6 +184,7 @@ model Comment {
   authorId       String?
   text           String    @db.Text
   isReply        Boolean   @default(false)
+  parentId       String?
   autoReplied    Boolean   @default(false)
   repliedAt      DateTime?
   postedAt       DateTime
@@ -190,9 +192,12 @@ model Comment {
   brand          Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
   account        SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
   target         PostPlatformTarget? @relation(fields: [targetId], references: [id])
+  parent         Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies        Comment[] @relation("CommentReplies")
 
   @@unique([platform, externalId])
   @@index([brandId, platform])
+  @@index([parentId])
 }
 
 model AutoReply {
@@ -208,6 +213,18 @@ model AutoReply {
   brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@unique([brandId, platform])
+}
+
+model CommentAiConfig {
+  id         String   @id @default(cuid())
+  brandId    String   @unique
+  isEnabled  Boolean  @default(false)
+  behaviour  String?  @db.Text
+  guidelines String?  @db.Text
+  niche      String?  @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  brand      Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 }
 
 model AnalyticsSnapshot {

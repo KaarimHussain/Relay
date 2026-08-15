@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommentsService } from './comments.service';
 
@@ -7,24 +7,32 @@ import { CommentsService } from './comments.service';
 export class CommentsScheduler {
   private readonly logger = new Logger(CommentsScheduler.name);
 
+  private running = false;
+
   constructor(
     private prisma: PrismaService,
     private comments: CommentsService,
   ) {}
 
-  @Cron(CronExpression.EVERY_30_MINUTES)
+  @Cron('*/30 * * * * *') // every 30 seconds
   async syncAll() {
-    const brands = await this.prisma.brand.findMany({ select: { id: true } });
-    this.logger.log(`Auto-syncing comments for ${brands.length} brands`);
-    for (const brand of brands) {
-      try {
-        const result = await this.comments.syncComments(brand.id);
-        if (result.synced > 0) {
-          this.logger.debug(`Brand ${brand.id}: synced ${result.synced} comments`);
+    // Guard against overlap — a sweep slower than 30s must not stack up.
+    if (this.running) return;
+    this.running = true;
+    try {
+      const brands = await this.prisma.brand.findMany({ select: { id: true } });
+      for (const brand of brands) {
+        try {
+          const result = await this.comments.syncComments(brand.id);
+          if (result.synced > 0) {
+            this.logger.debug(`Brand ${brand.id}: synced ${result.synced} comments`);
+          }
+        } catch (err: any) {
+          this.logger.warn(`Comment sync failed for brand ${brand.id}: ${err.message}`);
         }
-      } catch (err: any) {
-        this.logger.warn(`Comment sync failed for brand ${brand.id}: ${err.message}`);
       }
+    } finally {
+      this.running = false;
     }
   }
 }

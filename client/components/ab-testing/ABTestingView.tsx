@@ -8,6 +8,13 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { useBrandStore } from '@/store/brand';
 import { useToast } from '@/components/ui/toast';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 // UI preview only — variants and results are simulated client-side, not backed
@@ -106,13 +113,16 @@ function CreateTestModal({ onClose, onCreate }: { onClose: () => void; onCreate:
                 rows={3}
                 className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-lg text-xs text-gray-700 placeholder:text-gray-400 outline-none focus:border-orange-500 resize-none"
               />
-              <select
-                value={timeA}
-                onChange={(e) => setTimeA(e.target.value)}
-                className="h-8 px-2 text-xs bg-white border border-gray-200 rounded-lg outline-none focus:border-orange-500"
-              >
-                {['7:00 AM', '9:00 AM', '12:00 PM', '3:00 PM', '6:00 PM', '9:00 PM'].map(t => <option key={t}>{t}</option>)}
-              </select>
+              <Select value={timeA} onValueChange={(val) => val && setTimeA(val)}>
+                <SelectTrigger className="h-8 bg-white border-gray-200 text-xs text-gray-700 min-w-[120px]">
+                  <SelectValue placeholder="Select time" />
+                </SelectTrigger>
+                <SelectContent>
+                  {['7:00 AM', '9:00 AM', '12:00 PM', '3:00 PM', '6:00 PM', '9:00 PM'].map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex flex-col gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
@@ -124,13 +134,16 @@ function CreateTestModal({ onClose, onCreate }: { onClose: () => void; onCreate:
                 rows={3}
                 className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-lg text-xs text-gray-700 placeholder:text-gray-400 outline-none focus:border-orange-500 resize-none"
               />
-              <select
-                value={timeB}
-                onChange={(e) => setTimeB(e.target.value)}
-                className="h-8 px-2 text-xs bg-white border border-gray-200 rounded-lg outline-none focus:border-orange-500"
-              >
-                {['7:00 AM', '9:00 AM', '12:00 PM', '3:00 PM', '6:00 PM', '9:00 PM'].map(t => <option key={t}>{t}</option>)}
-              </select>
+              <Select value={timeB} onValueChange={(val) => val && setTimeB(val)}>
+                <SelectTrigger className="h-8 bg-white border-gray-200 text-xs text-gray-700 min-w-[120px]">
+                  <SelectValue placeholder="Select time" />
+                </SelectTrigger>
+                <SelectContent>
+                  {['7:00 AM', '9:00 AM', '12:00 PM', '3:00 PM', '6:00 PM', '9:00 PM'].map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

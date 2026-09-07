@@ -12,6 +12,13 @@ import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/store/brand';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -489,14 +496,17 @@ export function MediaLibraryView() {
                     className="flex-1 min-w-0 bg-transparent text-[13px] text-gray-700 placeholder:text-gray-400 outline-none" />
                 </div>
 
-                <select value={sort} onChange={e => setSort(e.target.value as SortKey)}
-                  className="h-8 pl-2.5 pr-7 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-600 outline-none appearance-none cursor-pointer hover:bg-gray-50 transition-colors"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}>
-                  <option value="newest">Newest first</option>
-                  <option value="oldest">Oldest first</option>
-                  <option value="name">Name A–Z</option>
-                  <option value="size">Largest first</option>
-                </select>
+                <Select value={sort} onValueChange={(val) => val && setSort(val as SortKey)}>
+                  <SelectTrigger className="h-8 bg-white border-gray-200 text-xs text-gray-700 min-w-[130px]">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Newest first</SelectItem>
+                    <SelectItem value="oldest">Oldest first</SelectItem>
+                    <SelectItem value="name">Name A–Z</SelectItem>
+                    <SelectItem value="size">Largest first</SelectItem>
+                  </SelectContent>
+                </Select>
 
                 <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
                   <button onClick={() => setViewMode('grid')}

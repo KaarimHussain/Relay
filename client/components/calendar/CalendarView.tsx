@@ -12,6 +12,13 @@ import {
 } from '@/components/ui/platform-icons';
 import { useBrandStore } from '@/store/brand';
 import { usePostStore } from '@/store/post';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -291,13 +298,16 @@ export function CalendarView() {
           </div>
 
           <div className="flex items-center gap-2">
-            <select value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value)}
-              className="flex-1 sm:flex-none h-8 px-2.5 pr-7 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 outline-none appearance-none cursor-pointer hover:bg-gray-50 transition-colors"
-              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}>
-              {PLATFORM_FILTERS.map((f) => (
-                <option key={f.value} value={f.value}>{f.label}</option>
-              ))}
-            </select>
+            <Select value={platformFilter} onValueChange={(val) => val && setPlatformFilter(val)}>
+              <SelectTrigger className="h-8 bg-white border-gray-200 text-xs text-gray-700 min-w-[140px]">
+                <SelectValue placeholder="All platforms" />
+              </SelectTrigger>
+              <SelectContent>
+                {PLATFORM_FILTERS.map((f) => (
+                  <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Link href="/posts/new" className="btn-clay-primary h-8 px-3 text-xs gap-1 font-semibold inline-flex items-center shrink-0">
               <Plus size={13} strokeWidth={2.5} /> New post
             </Link>

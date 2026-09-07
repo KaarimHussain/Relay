@@ -214,7 +214,7 @@ async function publishToLinkedIn(
 
   const headers = {
     Authorization: `Bearer ${accessToken}`,
-    'LinkedIn-Version': '202601',
+    'LinkedIn-Version': '202608',
     'X-Restli-Protocol-Version': '2.0.0',
     'Content-Type': 'application/json',
   };

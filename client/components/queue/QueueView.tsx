@@ -12,6 +12,13 @@ import { useBrandStore } from '@/store/brand';
 import { useToast } from '@/components/ui/toast';
 import { formatScheduledAt, sortDate } from '@/lib/format';
 import { ApiError } from '@/lib/api';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -127,6 +134,7 @@ function QueueRow({
   const cfg = STATUS_CONFIG[post.status];
   const excerpt = post.targets[0]?.caption ?? '—';
   const platforms = [...new Set(post.targets.map((t) => t.account?.platform).filter(Boolean))];
+  const isPublishable = post.status === 'Draft' || post.status === 'Failed';
 
   const handlePublishNow = async () => {
     setBusy(true);
@@ -138,7 +146,8 @@ function QueueRow({
   return (
     <div className={cn('flex items-center gap-2.5 px-4 py-2 transition-colors group relative', selected ? 'bg-orange-50/50' : 'hover:bg-gray-50/70')}>
       <input type="checkbox" checked={selected} onChange={onToggle}
-        className="w-3.5 h-3.5 rounded border-gray-300 accent-orange-500 cursor-pointer shrink-0" />
+        disabled={!isPublishable}
+        className="w-3.5 h-3.5 rounded border-gray-300 accent-orange-500 cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed" />
 
       {/* Media thumbnail */}
       <div className="w-8 h-8 rounded-md shrink-0 overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center">
@@ -246,6 +255,8 @@ export function QueueView() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
 
+  const canPublish = (post: Post) => post.status === 'Draft' || post.status === 'Failed';
+
   useEffect(() => {
     if (activeBrand?.id) fetchPosts(activeBrand.id);
   }, [activeBrand?.id, fetchPosts]);
@@ -275,6 +286,8 @@ export function QueueView() {
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map((p) => p.id)));
   const toggleRow = (id: string) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  const hasPublishable = useMemo(() => [...selected].some((id) => filtered.find((p) => p.id === id && canPublish(p))), [selected, filtered]);
+
   const handleBulkDelete = async () => {
     if (!activeBrand) return;
     setBulkBusy(true);
@@ -288,10 +301,12 @@ export function QueueView() {
 
   const handleBulkPublish = async () => {
     if (!activeBrand) return;
+    const toPublish = [...selected].filter((id) => filtered.find((p) => p.id === id && canPublish(p)));
+    if (toPublish.length === 0) return;
     setBulkBusy(true);
     try {
-      await Promise.all([...selected].map((id) => publishNow(activeBrand.id, id)));
-      toast(`Queued ${selected.size} post${selected.size > 1 ? 's' : ''} for publishing`, 'success');
+      await Promise.all(toPublish.map((id) => publishNow(activeBrand.id, id)));
+      toast(`Queued ${toPublish.length} draft post${toPublish.length > 1 ? 's' : ''} for publishing`, 'success');
       setSelected(new Set());
     } catch { toast('Some posts could not be published'); }
     finally { setBulkBusy(false); }
@@ -353,12 +368,15 @@ export function QueueView() {
             className="flex-1 min-w-0 bg-transparent text-[13px] text-gray-700 placeholder:text-gray-400 outline-none" />
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}
-            className="h-8 pl-2.5 pr-7 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-600 outline-none appearance-none cursor-pointer hover:bg-gray-50"
-            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}>
-            <option value="date-asc">Earliest first</option>
-            <option value="date-desc">Latest first</option>
-          </select>
+          <Select value={sort} onValueChange={(val) => val && setSort(val as SortKey)}>
+            <SelectTrigger className="h-8 bg-white border-gray-200 text-xs text-gray-700 min-w-[130px]">
+              <SelectValue placeholder="Sort order" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date-asc">Earliest first</SelectItem>
+              <SelectItem value="date-desc">Latest first</SelectItem>
+            </SelectContent>
+          </Select>
           <Link href="/posts/new" className="btn-clay-primary h-8 px-3 text-xs gap-1 font-semibold inline-flex items-center shrink-0">
             <Plus size={13} strokeWidth={2.5} /> New post
           </Link>
@@ -373,9 +391,9 @@ export function QueueView() {
             <button onClick={() => setSelected(new Set())} className="text-xs text-gray-500 hover:text-gray-800 transition-colors">Clear</button>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button disabled={bulkBusy} onClick={handleBulkPublish}
-              className="btn-clay-primary h-7 px-2.5 text-xs gap-1 inline-flex items-center disabled:opacity-50">
-              <Send size={12} /> Publish now
+            <button disabled={bulkBusy || !hasPublishable} onClick={handleBulkPublish}
+              className="btn-clay-primary h-7 px-2.5 text-xs gap-1 inline-flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
+              <Send size={12} /> Publish Draft Posts
             </button>
             <button disabled={bulkBusy} onClick={handleBulkDelete}
               className="h-7 px-2.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1 disabled:opacity-50">

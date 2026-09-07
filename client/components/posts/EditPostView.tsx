@@ -16,6 +16,7 @@ import { useBrandStore } from '@/store/brand';
 import { useAccountStore } from '@/store/account';
 import { usePostStore, Post } from '@/store/post';
 import { api, ApiError } from '@/lib/api';
+import { DateTimePicker } from '@/components/ui/date-time-picker';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -658,9 +659,11 @@ export function EditPostView({ postId }: { postId: string }) {
                 ))}
               </div>
               {mode === 'schedule' && (
-                <input type="datetime-local" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)}
+                <DateTimePicker
+                  value={scheduleDate}
+                  onChange={(val) => setScheduleDate(val)}
                   min={new Date().toISOString().slice(0, 16)}
-                  className="w-full h-8 bg-gray-50 border border-gray-200 rounded-lg px-2.5 text-xs text-gray-800 font-medium outline-none focus:border-orange-500" />
+                />
               )}
             </div>
           )}

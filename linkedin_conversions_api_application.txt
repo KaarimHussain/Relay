@@ -1,0 +1,90 @@
+====================================================================
+  LINKEDIN CONVERSIONS API — ACCESS REQUEST FORM ANSWERS
+  App: Relay  |  Client ID: 78whi9w7i49g03
+====================================================================
+
+--------------------------------------------------------------------
+QUESTION 1
+*What use case does your organization plan to enable with the
+ Conversions API? (select all that apply)
+--------------------------------------------------------------------
+
+SELECTED OPTIONS:
+  [x] Utilize Conversions API and Insight Tag together to measure
+      and optimize campaign performance
+
+  [x] To track and measure both online and offline events across
+      customer journey
+
+  [x] To provide alternative mechanism to track conversion events
+      for LinkedIn ads
+
+  [ ] Connect data to LinkedIn in a way that doesn't require
+      cookie-based tracking
+
+  [ ] Compliance requirements that prevent installing Insight Tag
+      on advertiser's website
+
+
+--------------------------------------------------------------------
+QUESTION 2
+*For each of the above selected options, please provide more
+ details about your use case for Conversions API
+--------------------------------------------------------------------
+
+PASTE THIS INTO THE TEXT BOX:
+----------------------------------------------------------------------
+Relay is a social media management SaaS platform that helps brands
+and marketing teams plan, schedule, publish, and analyze content
+across multiple social platforms including LinkedIn.
+
+Our users (primarily SMBs and marketing agencies) run organic
+LinkedIn content campaigns directly from Relay. We want to integrate
+the LinkedIn Conversions API to give them a closed-loop view of
+which posts and campaigns are actually driving business outcomes —
+signups, form fills, demo requests, and purchases — not just
+impressions and clicks.
+
+Specifically, we plan to:
+
+1. CAMPAIGN PERFORMANCE MEASUREMENT — Surface conversion data
+   alongside organic post analytics inside Relay's Analytics
+   dashboard. Users will see a "Conversions" column next to
+   engagement metrics (likes, comments, shares) so they can
+   measure the true ROI of each post and campaign.
+
+2. CROSS-JOURNEY TRACKING — Many of our users run both organic
+   LinkedIn posts and paid campaigns. We will use the Conversions
+   API to unify online conversion events (website visits, signups)
+   with the LinkedIn content that drove them, giving a full
+   customer journey view across organic and paid touchpoints.
+
+3. ALTERNATIVE TRACKING MECHANISM — Some of our users operate in
+   regulated industries (finance, healthcare) where installing the
+   LinkedIn Insight Tag directly on their website is restricted by
+   IT or compliance policy. The server-side Conversions API lets
+   these users still measure LinkedIn-driven conversions without
+   a client-side tag dependency.
+
+We will collect conversion events server-side via our NestJS
+backend and forward them to LinkedIn's Conversions API using the
+user's authenticated LinkedIn access token. All data handling
+follows GDPR and CCPA requirements — we do not store or resell
+user conversion data.
+----------------------------------------------------------------------
+
+
+====================================================================
+  NOTES FOR YOURSELF BEFORE SUBMITTING
+====================================================================
+
+- Double-check the app name shown on the form matches "Relay"
+- Make sure your LinkedIn account email matches the developer
+  account that owns Client ID 78whi9w7i49g03
+- After submitting, LinkedIn typically reviews within 5–10 business
+  days and emails the decision to the account owner
+- Once approved, the scope you'll need in the OAuth flow is:
+    rw_conversions
+  Add this to the LinkedIn scope string in oauth.service.ts
+
+====================================================================

@@ -85,70 +85,100 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   );
 }
 
-const CHART_W = 800;
-const CHART_H = 180;
-const C_PAD = { t: 12, r: 8, b: 28, l: 48 };
-const INNER_W = CHART_W - C_PAD.l - C_PAD.r;
-const INNER_H = CHART_H - C_PAD.t - C_PAD.b;
+const CHART_H = 200;
+const C_PAD = { t: 14, r: 14, b: 28, l: 44 };
 
 function AreaChart({ values, color, labels }: { values: number[]; color: string; labels: string[] }) {
-  const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(800);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  // Measure the container so the chart fills its full width (no dead space on the
+  // right) and 1 viewBox unit === 1px, which keeps the axis text crisp.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width;
+      if (w > 0) setWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const innerW = Math.max(width - C_PAD.l - C_PAD.r, 10);
+  const innerH = CHART_H - C_PAD.t - C_PAD.b;
+
   const normed = useMemo(() => normalize(values), [values]);
-  const pts = useMemo(() => getPoints(normed, INNER_W, INNER_H), [normed]);
-  const linePath = useMemo(() => buildLinePath(normed, INNER_W, INNER_H), [normed]);
-  const areaPath = useMemo(() => buildAreaPath(normed, INNER_W, INNER_H), [normed]);
+  const pts = useMemo(() => getPoints(normed, innerW, innerH), [normed, innerW, innerH]);
+  const linePath = useMemo(() => buildLinePath(normed, innerW, innerH), [normed, innerW, innerH]);
+  const areaPath = useMemo(() => buildAreaPath(normed, innerW, innerH), [normed, innerW, innerH]);
 
   const yMin = Math.min(...values);
   const yMax = Math.max(...values);
   const yTicks = [0, 0.5, 1].map(t => ({
-    y: C_PAD.t + (1 - t) * INNER_H,
+    y: C_PAD.t + (1 - t) * innerH,
     label: fmtBig(Math.round(yMin + t * (yMax - yMin))),
   }));
-  const xLabelIdxs = [0, Math.floor(values.length * 0.5), values.length - 1];
+  const xLabelIdxs = [0, Math.floor((values.length - 1) * 0.5), values.length - 1];
 
-  const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = svgRef.current!.getBoundingClientRect();
-    const svgX = ((e.clientX - rect.left) / rect.width) * CHART_W;
-    const innerX = svgX - C_PAD.l;
-    if (innerX < 0 || innerX > INNER_W) { setHover(null); return; }
-    const idx = Math.round((innerX / INNER_W) * (values.length - 1));
-    const clampedIdx = Math.max(0, Math.min(values.length - 1, idx));
-    setHover({ idx: clampedIdx, x: C_PAD.l + pts[clampedIdx][0], y: C_PAD.t + pts[clampedIdx][1] });
-  }, [pts, values.length]);
+  const handleMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = wrapRef.current!.getBoundingClientRect();
+    const innerX = e.clientX - rect.left - C_PAD.l;
+    if (innerX < 0 || innerX > innerW) { setHoverIdx(null); return; }
+    const idx = Math.round((innerX / innerW) * (values.length - 1));
+    setHoverIdx(Math.max(0, Math.min(values.length - 1, idx)));
+  }, [innerW, values.length]);
 
   const gradId = `area-${color.replace(/[^a-z0-9]/gi, '')}`;
+  const hx = hoverIdx != null ? C_PAD.l + pts[hoverIdx][0] : 0;
+  const hy = hoverIdx != null ? C_PAD.t + pts[hoverIdx][1] : 0;
 
   return (
-    <svg ref={svgRef} viewBox={`0 0 ${CHART_W} ${CHART_H}`} className="w-full"
-      style={{ height: CHART_H }} onMouseMove={handleMouseMove} onMouseLeave={() => setHover(null)}>
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.18" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {yTicks.map((t, i) => (
-        <g key={i}>
-          <line x1={C_PAD.l} y1={t.y} x2={CHART_W - C_PAD.r} y2={t.y} stroke="#E5E7EB" strokeWidth="1" strokeDasharray="3 3" />
-          <text x={C_PAD.l - 6} y={t.y + 3} textAnchor="end" fontSize="10" fontWeight="500" fill="#9CA3AF">{t.label}</text>
+    <div ref={wrapRef} className="relative w-full" onMouseMove={handleMove} onMouseLeave={() => setHoverIdx(null)}>
+      <svg viewBox={`0 0 ${width} ${CHART_H}`} width={width} height={CHART_H} className="block">
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.18" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {yTicks.map((t, i) => (
+          <g key={i}>
+            <line x1={C_PAD.l} y1={t.y} x2={width - C_PAD.r} y2={t.y} stroke="#E5E7EB" strokeWidth="1" strokeDasharray="3 3" />
+            <text x={C_PAD.l - 8} y={t.y + 3} textAnchor="end" fontSize="10" fontWeight="500" fill="#9CA3AF">{t.label}</text>
+          </g>
+        ))}
+        {xLabelIdxs.map((idx) => {
+          const x = C_PAD.l + (idx / (values.length - 1)) * innerW;
+          return <text key={idx} x={x} y={CHART_H - 6} textAnchor="middle" fontSize="10" fontWeight="500" fill="#9CA3AF">{labels[idx] ?? ''}</text>;
+        })}
+        <g transform={`translate(${C_PAD.l}, ${C_PAD.t})`}>
+          <path d={areaPath} fill={`url(#${gradId})`} />
+          <path d={linePath} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </g>
-      ))}
-      {xLabelIdxs.map((idx) => {
-        const x = C_PAD.l + (idx / (values.length - 1)) * INNER_W;
-        return <text key={idx} x={x} y={CHART_H - 6} textAnchor="middle" fontSize="10" fontWeight="500" fill="#9CA3AF">{labels[idx] ?? ''}</text>;
-      })}
-      <g transform={`translate(${C_PAD.l}, ${C_PAD.t})`}>
-        <path d={areaPath} fill={`url(#${gradId})`} />
-        <path d={linePath} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      </g>
-      {hover && (
-        <g>
-          <line x1={hover.x} y1={C_PAD.t} x2={hover.x} y2={CHART_H - C_PAD.b} stroke="#6366F1" strokeWidth="1" strokeDasharray="3 3" />
-          <circle cx={hover.x} cy={hover.y} r="4" fill={color} stroke="white" strokeWidth="2" />
-        </g>
+        {hoverIdx != null && (
+          <g>
+            <line x1={hx} y1={C_PAD.t} x2={hx} y2={CHART_H - C_PAD.b} stroke={color} strokeOpacity="0.45" strokeWidth="1" strokeDasharray="3 3" />
+            <circle cx={hx} cy={hy} r="4.5" fill={color} stroke="white" strokeWidth="2" />
+          </g>
+        )}
+      </svg>
+
+      {/* Hover tooltip — HTML overlay so it stays crisp and never clips inside the SVG.
+          Clamp horizontally so it never spills past the chart's left/right edges. */}
+      {hoverIdx != null && (
+        <div
+          className="absolute z-10 pointer-events-none -translate-x-1/2 -translate-y-full"
+          style={{ left: Math.min(Math.max(hx, 34), width - 34), top: Math.max(hy - 12, 8) }}
+        >
+          <div className="px-2.5 py-1.5 rounded-lg bg-gray-900 shadow-lg whitespace-nowrap text-center">
+            <div className="text-[10px] font-semibold text-gray-300 leading-tight">{labels[hoverIdx] ?? ''}</div>
+            <div className="text-xs font-bold text-white leading-tight tabular-nums">{fmtBig(values[hoverIdx])}</div>
+          </div>
+        </div>
       )}
-    </svg>
+    </div>
   );
 }
 
@@ -189,12 +219,15 @@ const METRICS: { key: MetricKey; label: string; icon: typeof Eye; svgColor: stri
 ];
 
 type Period = 7 | 30 | 90;
+type PlatformFilter = 'all' | keyof typeof PLATFORM_COLORS;
 
 // ─── AnalyticsView ────────────────────────────────────────────────────────────
 
 export function AnalyticsView() {
   const [period, setPeriod] = useState<Period>(30);
   const [activeMetric, setActiveMetric] = useState<MetricKey>('reach');
+  const [platform, setPlatform] = useState<PlatformFilter>('all');
+  const [platforms, setPlatforms] = useState<string[]>([]);
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [timeSeries, setTimeSeries] = useState<{ date: string; value: number }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -203,8 +236,21 @@ export function AnalyticsView() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [syncErrors, setSyncErrors] = useState<string[]>([]);
 
   const activeBrand = useBrandStore((s) => s.activeBrand());
+
+  // Query fragment appended when a specific platform is selected.
+  const platformQ = platform === 'all' ? '' : `&platform=${platform}`;
+
+  // Fetch the brand's connected platforms so we know which filter tabs to show.
+  useEffect(() => {
+    if (!activeBrand) { setPlatforms([]); return; }
+    setPlatform('all');
+    api.get<{ platform: string }[]>(`/brands/${activeBrand.id}/accounts`)
+      .then(accts => setPlatforms([...new Set(accts.map(a => a.platform))]))
+      .catch(() => setPlatforms([]));
+  }, [activeBrand?.id]);
 
   // Fetch KPI overview
   useEffect(() => {
@@ -213,11 +259,11 @@ export function AnalyticsView() {
     setError('');
     const from = new Date(Date.now() - period * 86_400_000).toISOString();
     const to = new Date().toISOString();
-    api.get<AnalyticsOverview>(`/brands/${activeBrand.id}/analytics/overview?from=${from}&to=${to}`)
+    api.get<AnalyticsOverview>(`/brands/${activeBrand.id}/analytics/overview?from=${from}&to=${to}${platformQ}`)
       .then(setOverview)
       .catch(err => setError(err instanceof ApiError ? err.message : 'Failed to load analytics'))
       .finally(() => setLoading(false));
-  }, [activeBrand?.id, period, refreshTick]);
+  }, [activeBrand?.id, period, platform, refreshTick]);
 
   // Fetch time-series for chart
   useEffect(() => {
@@ -227,18 +273,19 @@ export function AnalyticsView() {
     const to = new Date().toISOString();
     const metric = activeMetric === 'engagements' ? 'engagements' : activeMetric;
     api.get<{ date: string; value: number }[]>(
-      `/brands/${activeBrand.id}/analytics/time-series?metric=${metric}&from=${from}&to=${to}`
+      `/brands/${activeBrand.id}/analytics/time-series?metric=${metric}&from=${from}&to=${to}${platformQ}`
     )
       .then(setTimeSeries)
       .catch(() => setTimeSeries([]))
       .finally(() => setChartLoading(false));
-  }, [activeBrand?.id, period, activeMetric, refreshTick]);
+  }, [activeBrand?.id, period, activeMetric, platform, refreshTick]);
 
   // Pull fresh insights from the platforms on demand, then reload.
   const handleRefresh = async () => {
     if (!activeBrand || refreshing) return;
     setRefreshing(true);
     setSyncMsg(null);
+    setSyncErrors([]);
     try {
       const r = await api.post<{ collected: number; targets: number; errors: string[]; message?: string }>(
         `/brands/${activeBrand.id}/analytics/collect`, {}
@@ -248,6 +295,8 @@ export function AnalyticsView() {
         `Collected fresh data from ${r.collected} of ${r.targets} post target${r.targets !== 1 ? 's' : ''}.` +
         (r.errors.length ? ` ${r.errors.length} error${r.errors.length !== 1 ? 's' : ''}.` : '')
       );
+      // Surface the distinct error reasons so failures are diagnosable, not just counted.
+      setSyncErrors([...new Set(r.errors ?? [])]);
       setRefreshTick(t => t + 1);
     } catch (e) {
       setSyncMsg(e instanceof ApiError ? e.message : 'Refresh failed');
@@ -364,10 +413,37 @@ export function AnalyticsView() {
         </div>
       </div>
 
+      {/* Platform filter tabs — scope every metric below to one connected platform */}
+      {platforms.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          {(['all', ...platforms] as PlatformFilter[]).map(p => {
+            const isActive = platform === p;
+            const dot = p !== 'all' ? PLATFORM_COLORS[p] ?? '#9CA3AF' : undefined;
+            return (
+              <button key={p} onClick={() => setPlatform(p)}
+                className={cn('h-7 px-2.5 text-[11px] font-medium rounded-lg transition-colors inline-flex items-center gap-1.5 shrink-0',
+                  isActive ? 'btn-clay-primary text-white' : 'btn-clay-secondary text-gray-600')}>
+                {dot && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: isActive ? '#fff' : dot }} />}
+                {p === 'all' ? 'All platforms' : p}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {syncMsg && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-          <Info size={12} className="text-gray-400 shrink-0" />
-          <p className="text-[11.5px] text-gray-600">{syncMsg}</p>
+        <div className="flex flex-col gap-1.5 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Info size={12} className="text-gray-400 shrink-0" />
+            <p className="text-[11.5px] text-gray-600">{syncMsg}</p>
+          </div>
+          {syncErrors.length > 0 && (
+            <ul className="pl-5 flex flex-col gap-0.5">
+              {syncErrors.map((e, i) => (
+                <li key={i} className="text-[11px] text-red-600 leading-snug list-disc">{e}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -445,17 +521,13 @@ export function AnalyticsView() {
             )}
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <div className="min-w-[480px]">
-            {chartValues.length > 1 ? (
-              <AreaChart values={chartValues} color={activeColor} labels={labels} />
-            ) : (
-              <div className="flex items-center justify-center h-[180px]">
-                <p className="text-xs text-gray-400">Publish posts to see trend data here.</p>
-              </div>
-            )}
+        {chartValues.length > 1 ? (
+          <AreaChart values={chartValues} color={activeColor} labels={labels} />
+        ) : (
+          <div className="flex items-center justify-center h-[200px]">
+            <p className="text-xs text-gray-400">Publish posts to see trend data here.</p>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Bottom Grid */}

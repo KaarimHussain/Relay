@@ -6,7 +6,7 @@ import { AccountStatus } from '@prisma/client';
 
 @Injectable()
 export class AccountsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async connect(brandId: string, dto: ConnectAccountDto) {
     if (!brandId) throw new BadRequestException('No brand selected — please create a brand first.');
@@ -103,8 +103,8 @@ export class AccountsService {
         `https://api.linkedin.com/v2/organizations/${encodeURIComponent(slug)}?fields=localizedName`,
         {
           headers: {
-            Authorization:               `Bearer ${accessToken}`,
-            'LinkedIn-Version':          '202408',
+            Authorization: `Bearer ${accessToken}`,
+            'LinkedIn-Version': '202408',
             'X-Restli-Protocol-Version': '2.0.0',
           },
         },
@@ -116,7 +116,7 @@ export class AccountsService {
     } catch { /* use slug as fallback name */ }
 
     return this.connect(brandId, {
-      platform:       'LinkedIn',
+      platform: 'LinkedIn',
       platformUserId: `org:${slug}`,
       platformHandle: pageName,
       accessToken,

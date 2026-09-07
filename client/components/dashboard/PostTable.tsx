@@ -7,7 +7,7 @@ import { SlidersHorizontal, MoreVertical, Loader2, AlertCircle } from 'lucide-re
 import { cn } from '@/lib/utils';
 import { PlatformBadge } from '@/components/ui/platform-icons';
 import { useToast } from '@/components/ui/toast';
-import { usePostStore, PostStatus } from '@/store/post';
+import { usePostStore, Post, PostStatus } from '@/store/post';
 import { useBrandStore } from '@/store/brand';
 import { formatScheduledAt } from '@/lib/format';
 
@@ -41,10 +41,14 @@ export function PostTable() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
+  const canPublish = (post: Post) => post.status === 'Draft' || post.status === 'Failed';
+
   // Show latest 5 posts sorted by updatedAt desc
   const recent = [...posts]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 5);
+
+  const publishableCount = [...selected].filter((id) => recent.find((p) => p.id === id && canPublish(p))).length;
 
   const allSelected = selected.size === recent.length && recent.length > 0;
   const someSelected = selected.size > 0 && !allSelected;
@@ -57,8 +61,10 @@ export function PostTable() {
 
   const handlePublish = async () => {
     if (!activeBrand) return;
-    await Promise.all([...selected].map((id) => publishNow(activeBrand.id, id).catch(() => null)));
-    toast(`${selected.size} post(s) queued for publishing`, 'success');
+    const toPublish = [...selected].filter((id) => recent.find((p) => p.id === id && canPublish(p)));
+    if (toPublish.length === 0) return;
+    await Promise.all(toPublish.map((id) => publishNow(activeBrand.id, id).catch(() => null)));
+    toast(`${toPublish.length} draft post(s) queued for publishing`, 'success');
     setSelected(new Set());
   };
 
@@ -139,7 +145,8 @@ export function PostTable() {
                       isSelected ? 'bg-orange-50/50' : 'hover:bg-gray-50/60')}>
                     <div className="w-8 shrink-0">
                       <input type="checkbox" checked={isSelected} onChange={() => toggleRow(post.id)}
-                        className="w-3.5 h-3.5 rounded border-gray-300 accent-orange-600 cursor-pointer" />
+                        disabled={!canPublish(post)}
+                        className="w-3.5 h-3.5 rounded border-gray-300 accent-orange-600 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed" />
                     </div>
                     <div className="flex-1 min-w-0 pr-4">
                       <p className="text-xs font-medium text-gray-900 truncate hover:text-orange-600 transition-colors">
@@ -184,7 +191,8 @@ export function PostTable() {
                 <div key={post.id}
                   className={cn('flex items-start gap-3 px-4 py-3 transition-colors', isSelected ? 'bg-orange-50/50' : '')}>
                   <input type="checkbox" checked={isSelected} onChange={() => toggleRow(post.id)}
-                    className="mt-0.5 w-3.5 h-3.5 rounded border-gray-300 accent-orange-600 cursor-pointer shrink-0" />
+                    disabled={!canPublish(post)}
+                    className="mt-0.5 w-3.5 h-3.5 rounded border-gray-300 accent-orange-600 cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-gray-900 leading-snug line-clamp-2">{post.title}</p>
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -212,7 +220,7 @@ export function PostTable() {
                 <button onClick={() => setSelected(new Set())} className="text-xs text-gray-500 hover:text-gray-800 transition-colors font-medium">Clear</button>
               </div>
               <div className="flex items-center gap-1.5">
-                <button onClick={handlePublish} className="btn-clay-primary h-7 px-2.5 text-xs">Publish Now</button>
+                <button onClick={handlePublish} disabled={publishableCount === 0} className={cn("btn-clay-primary h-7 px-2.5 text-xs", publishableCount === 0 && "opacity-50 cursor-not-allowed")}>Publish Draft Posts</button>
                 <button onClick={handleDelete} className="h-7 px-2.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">Delete</button>
               </div>
             </div>

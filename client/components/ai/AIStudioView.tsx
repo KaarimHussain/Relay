@@ -13,6 +13,13 @@ import { useBrandStore } from '@/store/brand';
 import { useTemplateStore } from '@/store/template';
 import { PlatformBadge } from '@/components/ui/platform-icons';
 import { api, ApiError } from '@/lib/api';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -197,10 +204,16 @@ function CaptionWriter() {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <select value={platform} onChange={e => setPlatform(e.target.value as BackendPlatform)}
-              className="h-8.5 bg-gray-50 border border-gray-200 rounded-lg text-xs px-2.5 font-medium text-gray-700 outline-none">
-              {BACKEND_PLATFORMS.map(p => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
-            </select>
+            <Select value={platform} onValueChange={(val) => val && setPlatform(val as BackendPlatform)}>
+              <SelectTrigger className="h-8.5 bg-gray-50 border-gray-200 text-xs text-gray-700 font-medium min-w-[130px]">
+                <SelectValue placeholder="Select platform" />
+              </SelectTrigger>
+              <SelectContent>
+                {BACKEND_PLATFORMS.map((p) => (
+                  <SelectItem key={p} value={p}>{PLATFORM_LABELS[p]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <GenerateButton loading={loading} onClick={generate} disabled={!topic.trim()} />
           </div>
         </div>

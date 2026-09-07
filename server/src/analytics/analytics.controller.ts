@@ -1,8 +1,15 @@
 import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Platform } from '@prisma/client';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { BrandMemberGuard } from '../common/guards/brand-member.guard';
+
+/** Accept a raw `platform` query value only if it is a known Platform enum member. */
+function parsePlatform(value?: string): Platform | undefined {
+  if (!value || value === 'all') return undefined;
+  return (Object.values(Platform) as string[]).includes(value) ? (value as Platform) : undefined;
+}
 
 @ApiTags('Analytics')
 @ApiBearerAuth()
@@ -14,21 +21,29 @@ export class AnalyticsController {
   @Get('overview')
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
-  overview(@Param('brandId') brandId: string, @Query('from') from?: string, @Query('to') to?: string) {
-    return this.analytics.overview(brandId, from, to);
+  @ApiQuery({ name: 'platform', required: false, enum: Platform })
+  overview(
+    @Param('brandId') brandId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('platform') platform?: string,
+  ) {
+    return this.analytics.overview(brandId, from, to, parsePlatform(platform));
   }
 
   @Get('time-series')
   @ApiQuery({ name: 'metric', required: false })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
+  @ApiQuery({ name: 'platform', required: false, enum: Platform })
   timeSeries(
     @Param('brandId') brandId: string,
     @Query('metric') metric = 'reach',
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('platform') platform?: string,
   ) {
-    return this.analytics.timeSeries(brandId, metric, from, to);
+    return this.analytics.timeSeries(brandId, metric, from, to, parsePlatform(platform));
   }
 
   @Get('posts/:postId')

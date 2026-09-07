@@ -35,6 +35,12 @@ enum AccountStatus {
   Disconnected
 }
 
+enum CompetitorSource {
+  Manual
+  InstagramApi
+  RapidApi
+}
+
 model User {
   id                 String                @id @default(cuid())
   email              String                @unique
@@ -76,6 +82,8 @@ model Brand {
   comments     Comment[]
   autoReplies  AutoReply[]
   commentAiConfig CommentAiConfig?
+  competitors  Competitor[]
+  trendCaches  TrendCache[]
 }
 
 model Template {
@@ -225,6 +233,44 @@ model CommentAiConfig {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   brand      Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+}
+
+model Competitor {
+  id            String           @id @default(cuid())
+  brandId       String
+  platform      Platform
+  handle        String
+  displayName   String?
+  avatarUrl     String?          @db.Text
+  followerCount Int              @default(0)
+  mediaCount    Int              @default(0)
+  avgLikes      Int              @default(0)
+  avgComments   Int              @default(0)
+  postsPerWeek  Float            @default(0)
+  source        CompetitorSource @default(Manual)
+  lastSyncedAt  DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  brand         Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, platform, handle])
+  @@index([brandId])
+}
+
+model TrendCache {
+  id          String   @id @default(cuid())
+  brandId     String
+  platform    String
+  tag         String
+  category    String   @default("General")
+  mediaCount  Int      @default(0)
+  prevCount   Int      @default(0)
+  externalId  String?
+  updatedAt   DateTime @updatedAt
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, platform, tag])
+  @@index([brandId, platform])
 }
 
 model AnalyticsSnapshot {

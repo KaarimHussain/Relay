@@ -358,7 +358,7 @@ export class OAuthService {
     // LinkedIn v2 REST API requires these headers on every call
     const liHeaders = {
       Authorization:                `Bearer ${accessToken}`,
-      'LinkedIn-Version':           '202408',
+      'LinkedIn-Version':           '202608',
       'X-Restli-Protocol-Version':  '2.0.0',
     };
 

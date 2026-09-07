@@ -1,4 +1,5 @@
 ﻿import { AnalyticsView } from '@/components/analytics/AnalyticsView';
+import { CompetitorAnalysis } from '@/components/analytics/CompetitorAnalysis';
 
 export default function AnalyticsPage() {
   return (
@@ -11,6 +12,7 @@ export default function AnalyticsPage() {
       </div>
 
       <AnalyticsView />
+      <CompetitorAnalysis />
     </div>
   );
 }

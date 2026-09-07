@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService } from '../accounts/accounts.service';
-import { PostStatus } from '@prisma/client';
+import { PostStatus, Platform } from '@prisma/client';
 
 interface Metrics {
   reach: number; impressions: number; likes: number; comments: number;
@@ -10,24 +10,49 @@ interface Metrics {
 
 // ─── Platform insight fetchers ─────────────────────────────────────────────────
 
+/**
+ * Fetch lifetime insight metrics, resilient to Meta's frequent metric deprecations
+ * (e.g. `impressions` removed in v22). Tries the batch first; if Meta rejects it with
+ * an invalid-metric error (#100), it probes each metric individually and keeps the
+ * ones that still work, so one dead metric never zeroes out the whole request.
+ */
+async function fetchInsightValues(base: string, metrics: string[], accessToken: string): Promise<Record<string, number>> {
+  const url = (m: string[]) => `${base}/insights?metric=${m.join(',')}&period=lifetime&access_token=${accessToken}`;
+  const parse = (data: any): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const item of data.data ?? []) out[item.name] = item.values?.[0]?.value ?? item.value ?? 0;
+    return out;
+  };
+
+  const res = await fetch(url(metrics));
+  const data = await res.json() as any;
+  if (!data.error) return parse(data);
+  if (data.error.code !== 100) throw new Error(data.error.message ?? 'Insights error');
+
+  // An invalid metric was in the batch — probe each metric on its own, ignore failures.
+  const out: Record<string, number> = {};
+  await Promise.all(metrics.map(async (m) => {
+    try {
+      const r = await fetch(url([m]));
+      const d = await r.json() as any;
+      if (!d.error) Object.assign(out, parse(d));
+    } catch { /* skip a metric that's no longer supported */ }
+  }));
+  return out;
+}
+
 async function fetchFacebookInsights(postId: string, accessToken: string): Promise<Metrics> {
   const base = `https://graph.facebook.com/v21.0/${postId}`;
-  const [insightsRes, engRes] = await Promise.all([
-    fetch(`${base}/insights?metric=post_impressions,post_impressions_unique,post_clicks&period=lifetime&access_token=${accessToken}`),
+  const [insights, engRes] = await Promise.all([
+    fetchInsightValues(base, ['post_impressions', 'post_impressions_unique', 'post_clicks'], accessToken),
     fetch(`${base}?fields=reactions.summary(true),comments.summary(true),shares&access_token=${accessToken}`),
   ]);
-  const [insightsData, engData] = await Promise.all([insightsRes.json(), engRes.json()]) as [any, any];
-  if (insightsData.error || engData.error) {
-    throw new Error(insightsData.error?.message ?? engData.error?.message ?? 'Facebook Insights error');
-  }
-  const getValue = (name: string): number => {
-    const item = insightsData.data?.find((d: any) => d.name === name);
-    return item?.values?.[0]?.value ?? item?.value ?? 0;
-  };
+  const engData = await engRes.json() as any;
+  if (engData.error) throw new Error(engData.error.message ?? 'Facebook engagement error');
   return {
-    impressions: getValue('post_impressions'),
-    reach:       getValue('post_impressions_unique'),
-    clicks:      getValue('post_clicks'),
+    impressions: insights['post_impressions'] ?? 0,
+    reach:       insights['post_impressions_unique'] ?? 0,
+    clicks:      insights['post_clicks'] ?? 0,
     likes:       (engData.reactions?.summary?.total_count ?? 0) as number,
     comments:    (engData.comments?.summary?.total_count ?? 0) as number,
     shares:      (engData.shares?.count ?? 0) as number,
@@ -36,22 +61,22 @@ async function fetchFacebookInsights(postId: string, accessToken: string): Promi
 }
 
 async function fetchInstagramInsights(mediaId: string, accessToken: string): Promise<Metrics> {
-  const res = await fetch(
-    `https://graph.facebook.com/v21.0/${mediaId}/insights?metric=impressions,reach,likes,comments,shares,saved&period=lifetime&access_token=${accessToken}`
-  );
-  const data = await res.json() as any;
-  if (data.error) throw new Error(data.error.message ?? 'Instagram Insights error');
-  const getValue = (name: string): number => {
-    const item = data.data?.find((d: any) => d.name === name);
-    return item?.values?.[0]?.value ?? item?.value ?? 0;
-  };
+  const base = `https://graph.facebook.com/v21.0/${mediaId}`;
+  // `impressions` was removed in v22 → use `views`. Likes/comments come straight from
+  // the media node (always available), which is more reliable than the insight metrics.
+  const [insights, engRes] = await Promise.all([
+    fetchInsightValues(base, ['reach', 'saved', 'shares', 'views'], accessToken),
+    fetch(`${base}?fields=like_count,comments_count&access_token=${accessToken}`),
+  ]);
+  const eng = await engRes.json() as any;
+  if (eng.error) throw new Error(eng.error.message ?? 'Instagram media error');
   return {
-    impressions: getValue('impressions'),
-    reach:       getValue('reach'),
-    likes:       getValue('likes'),
-    comments:    getValue('comments'),
-    shares:      getValue('shares'),
-    saves:       getValue('saved'),
+    impressions: insights['views'] ?? insights['impressions'] ?? 0,
+    reach:       insights['reach'] ?? 0,
+    likes:       (eng.like_count ?? 0) as number,
+    comments:    (eng.comments_count ?? 0) as number,
+    shares:      insights['shares'] ?? 0,
+    saves:       insights['saved'] ?? 0,
     clicks:      0,
   };
 }
@@ -65,14 +90,14 @@ export class AnalyticsService {
     private accounts: AccountsService,
   ) {}
 
-  async overview(brandId: string, from?: string, to?: string) {
+  async overview(brandId: string, from?: string, to?: string, platform?: Platform) {
     const fromDate = from ? new Date(from) : new Date(Date.now() - 30 * 86400000);
     const toDate = to ? new Date(to) : new Date();
 
     const snapshots = await this.prisma.analyticsSnapshot.findMany({
       where: {
         takenAt: { gte: fromDate, lte: toDate },
-        target: { post: { brandId } },
+        target: { post: { brandId }, ...(platform ? { account: { platform } } : {}) },
       },
       include: { target: { include: { account: { select: { platform: true } } } } },
       orderBy: { takenAt: 'asc' },
@@ -139,14 +164,14 @@ export class AnalyticsService {
     }));
   }
 
-  async timeSeries(brandId: string, metric: string, from?: string, to?: string) {
+  async timeSeries(brandId: string, metric: string, from?: string, to?: string, platform?: Platform) {
     const fromDate = from ? new Date(from) : new Date(Date.now() - 30 * 86_400_000);
     const toDate = to ? new Date(to) : new Date();
 
     const snapshots = await this.prisma.analyticsSnapshot.findMany({
       where: {
         takenAt: { gte: fromDate, lte: toDate },
-        target: { post: { brandId } },
+        target: { post: { brandId }, ...(platform ? { account: { platform } } : {}) },
       },
       orderBy: { takenAt: 'asc' },
     });

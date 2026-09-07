@@ -13,6 +13,8 @@ import { AiModule } from './ai/ai.module';
 import { TemplatesModule } from './templates/templates.module';
 import { OAuthModule } from './oauth/oauth.module';
 import { CommentsModule } from './comments/comments.module';
+import { CompetitorsModule } from './competitors/competitors.module';
+import { TrendsModule } from './trends/trends.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { CommentsModule } from './comments/comments.module';
     TemplatesModule,
     OAuthModule,
     CommentsModule,
+    CompetitorsModule,
+    TrendsModule,
   ],
 })
 export class AppModule {}

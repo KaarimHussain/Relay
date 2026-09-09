@@ -8,5 +8,6 @@ import { AccountsModule } from '../accounts/accounts.module';
   imports: [AccountsModule],
   controllers: [PostsController],
   providers: [PostsService, PostScheduler],
+  exports: [PostsService],
 })
 export class PostsModule {}

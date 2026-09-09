@@ -9,5 +9,6 @@ import { AiModule } from '../ai/ai.module';
   imports: [AccountsModule, AiModule],
   controllers: [CommentsController],
   providers: [CommentsService, CommentsScheduler],
+  exports: [CommentsService],
 })
 export class CommentsModule {}

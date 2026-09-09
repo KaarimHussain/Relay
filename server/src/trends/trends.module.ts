@@ -5,5 +5,6 @@ import { TrendsController } from './trends.controller';
 @Module({
   controllers: [TrendsController],
   providers: [TrendsService],
+  exports: [TrendsService],
 })
 export class TrendsModule {}

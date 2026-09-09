@@ -15,6 +15,8 @@ import { OAuthModule } from './oauth/oauth.module';
 import { CommentsModule } from './comments/comments.module';
 import { CompetitorsModule } from './competitors/competitors.module';
 import { TrendsModule } from './trends/trends.module';
+import { McpModule } from './mcp/mcp.module';
+import { AgentModule } from './agent/agent.module';
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { TrendsModule } from './trends/trends.module';
     CommentsModule,
     CompetitorsModule,
     TrendsModule,
+    McpModule,
+    AgentModule,
   ],
 })
 export class AppModule {}

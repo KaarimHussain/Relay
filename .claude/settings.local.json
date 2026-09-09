@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm view *)",
+      "PowerShell(npm run *)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\AL SYED COMPUTER\\\\Desktop\\\\Relay\\\\client\"; npx tsc --noEmit -p tsconfig.json; Write-Output \"EXITCODE=$LASTEXITCODE\")",
+      "PowerShell(npm install *)"
+    ]
+  }
+}

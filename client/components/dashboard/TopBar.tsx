@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/auth';
 import { loadNotificationPrefs } from '@/lib/notificationPrefs';
 import { formatScheduledAt, timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { AgentSwitch } from '@/components/agent/AgentSwitch';
 
 interface TopBarProps {
   onMenuClick: () => void;
@@ -151,7 +152,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
     <header className="bg-white border-b border-gray-100 shrink-0 sticky top-0 z-40">
       <div className="max-w-7xl mx-auto w-full flex items-center justify-between h-12 px-4 gap-3">
 
-        {/* Left: hamburger (mobile) */}
+        {/* Left: navigation and interaction mode */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <button
             onClick={onMenuClick}
@@ -160,6 +161,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
           >
             <Menu size={18} />
           </button>
+          <AgentSwitch />
         </div>
 
         {/* Right actions */}

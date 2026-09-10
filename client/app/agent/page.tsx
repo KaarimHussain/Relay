@@ -19,8 +19,14 @@ import {
   type Message,
   type ToolCall,
 } from '@/lib/agent-storage';
-import { streamAgentChat, type AgentMessagePayload } from '@/lib/agent-stream';
+import {
+  streamAgentApproval,
+  streamAgentChat,
+  type AgentMessagePayload,
+} from '@/lib/agent-stream';
 import { Markdown } from '@/components/agent/Markdown';
+import { api } from '@/lib/api';
+import { AgentSwitch } from '@/components/agent/AgentSwitch';
 
 const SUGGESTIONS = [
   'What brands do I have?',
@@ -37,18 +43,46 @@ export default function AgentPage() {
   const [input, setInput] = useState('');
   const [pendingFiles, setPendingFiles] = useState<Attachment[]>([]);
   const [pending, setPending] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [approvalPending, setApprovalPending] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestConversationRef = useRef<Conversation | null>(null);
 
   useEffect(() => {
-    const loaded = conversationsStore.load();
-    setConversations(loaded);
-    if (loaded.length > 0) setActiveId(loaded[0].id);
+    let active = true;
+    const load = async () => {
+      const localConversations = conversationsStore.load();
+      try {
+        let loaded = await api.get<Conversation[]>('/agent/conversations');
+        if (loaded.length === 0 && localConversations.length > 0) {
+          await Promise.all(
+            localConversations.map((conversation) =>
+              api.put(`/agent/conversations/${conversation.id}`, conversation),
+            ),
+          );
+          conversationsStore.clear();
+          loaded = localConversations;
+        }
+        if (!active) return;
+        setConversations(loaded);
+        if (loaded.length > 0) setActiveId(loaded[0].id);
+      } catch {
+        // Keep legacy browser history as an offline fallback only.
+        if (!active) return;
+        setConversations(localConversations);
+        if (localConversations.length > 0) setActiveId(localConversations[0].id);
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const active = useMemo(
@@ -73,11 +107,32 @@ export default function AgentPage() {
   }, [input]);
 
   const persist = useCallback((next: Conversation) => {
-    conversationsStore.upsert(next);
     setConversations((prev) => {
       const filtered = prev.filter((c) => c.id !== next.id);
       return [next, ...filtered];
     });
+    latestConversationRef.current = next;
+    if (saveTimerRef.current) return;
+    saveTimerRef.current = setTimeout(async () => {
+      saveTimerRef.current = null;
+      const snapshot = latestConversationRef.current;
+      if (!snapshot) return;
+      try {
+        await api.put(`/agent/conversations/${snapshot.id}`, snapshot);
+      } catch {
+        conversationsStore.upsert(snapshot);
+      }
+      if (latestConversationRef.current !== snapshot) {
+        const latest = latestConversationRef.current;
+        if (latest) {
+          try {
+            await api.put(`/agent/conversations/${latest.id}`, latest);
+          } catch {
+            conversationsStore.upsert(latest);
+          }
+        }
+      }
+    }, 400);
   }, []);
 
   const newChat = useCallback(() => {
@@ -91,6 +146,7 @@ export default function AgentPage() {
   const deleteChat = useCallback(
     (id: string) => {
       conversationsStore.remove(id);
+      void api.delete(`/agent/conversations/${id}`).catch(() => undefined);
       const next = conversations.filter((c) => c.id !== id);
       setConversations(next);
       if (activeId === id) setActiveId(next[0]?.id ?? null);
@@ -189,6 +245,15 @@ export default function AgentPage() {
         role: m.role,
         content: m.content,
         attachments: m.attachments,
+        toolCalls: m.toolCalls
+          ?.filter((tc) => tc.status !== 'running')
+          .map((tc) => ({
+            id: tc.id,
+            name: tc.name,
+            args: tc.args,
+            result: tc.result,
+            error: tc.error,
+          })),
       }));
 
     const controller = new AbortController();
@@ -241,6 +306,19 @@ export default function AgentPage() {
                 : tc,
             ),
           }));
+        } else if (ev.type === 'approval_required') {
+          updateAssistant((m) => ({
+            ...m,
+            toolCalls: (m.toolCalls ?? []).map((tc) =>
+              tc.id === ev.toolCallId
+                ? {
+                    ...tc,
+                    status: 'awaiting_approval',
+                    approval: { id: ev.approvalId, summary: ev.summary },
+                  }
+                : tc,
+            ),
+          }));
         } else if (ev.type === 'error') {
           updateAssistant((m) => ({
             ...m,
@@ -263,7 +341,133 @@ export default function AgentPage() {
     }
   };
 
+  const resolveApproval = async (
+    sourceMessageId: string,
+    sourceToolCall: ToolCall,
+    decision: 'approve' | 'reject',
+  ) => {
+    const approval = sourceToolCall.approval;
+    if (!approval || !active || approvalPending) return;
+
+    const now = Date.now();
+    const resumedToolCall: ToolCall = {
+      ...sourceToolCall,
+      status: 'running',
+      approval: undefined,
+    };
+    const assistantMsg: Message = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: '',
+      reasoning: '',
+      toolCalls: [resumedToolCall],
+      createdAt: now,
+    };
+    let conv: Conversation = {
+      ...active,
+      updatedAt: now,
+      messages: [
+        ...active.messages.map<Message>((message) =>
+          message.id === sourceMessageId
+            ? {
+                ...message,
+                toolCalls: (message.toolCalls ?? []).map<ToolCall>((toolCall) =>
+                  toolCall.id === sourceToolCall.id
+                    ? {
+                        ...toolCall,
+                        status: decision === 'approve' ? 'approved' : 'rejected',
+                      }
+                    : toolCall,
+                ),
+              }
+            : message,
+        ),
+        assistantMsg,
+      ],
+    };
+    persist(conv);
+    setApprovalPending(approval.id);
+
+    const updateAssistant = (updater: (message: Message) => Message) => {
+      conv = {
+        ...conv,
+        updatedAt: Date.now(),
+        messages: conv.messages.map((message) =>
+          message.id === assistantMsg.id ? updater(message) : message,
+        ),
+      };
+      persist(conv);
+    };
+
+    try {
+      for await (const ev of streamAgentApproval(approval.id, decision)) {
+        if (ev.type === 'content_delta') {
+          updateAssistant((message) => ({
+            ...message,
+            content: message.content + ev.text,
+          }));
+        } else if (ev.type === 'reasoning_delta') {
+          updateAssistant((message) => ({
+            ...message,
+            reasoning: (message.reasoning ?? '') + ev.text,
+          }));
+        } else if (ev.type === 'tool_call') {
+          updateAssistant((message) => ({
+            ...message,
+            toolCalls: [
+              ...(message.toolCalls ?? []),
+              { id: ev.id, name: ev.name, args: ev.args, status: 'running' },
+            ],
+          }));
+        } else if (ev.type === 'tool_result') {
+          updateAssistant((message) => ({
+            ...message,
+            toolCalls: (message.toolCalls ?? []).map((toolCall) =>
+              toolCall.id === ev.id
+                ? {
+                    ...toolCall,
+                    result: ev.result,
+                    error: ev.error,
+                    status: ev.error ? 'error' : 'done',
+                  }
+                : toolCall,
+            ),
+          }));
+        } else if (ev.type === 'approval_required') {
+          updateAssistant((message) => ({
+            ...message,
+            toolCalls: (message.toolCalls ?? []).map((toolCall) =>
+              toolCall.id === ev.toolCallId
+                ? {
+                    ...toolCall,
+                    status: 'awaiting_approval',
+                    approval: { id: ev.approvalId, summary: ev.summary },
+                  }
+                : toolCall,
+            ),
+          }));
+        } else if (ev.type === 'error') {
+          updateAssistant((message) => ({
+            ...message,
+            content: message.content || `Something went wrong: ${ev.message}`,
+          }));
+        }
+      }
+    } finally {
+      setApprovalPending(null);
+    }
+  };
+
   const stop = () => abortRef.current?.abort();
+
+  const copyAll = async () => {
+    if (messages.length === 0) return;
+    const text = messages
+      .filter((m) => m.content)
+      .map((m) => `${m.role === 'user' ? 'You' : 'Relay Agent'}: ${m.content}`)
+      .join('\n\n');
+    await navigator.clipboard.writeText(text);
+  };
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -277,8 +481,18 @@ export default function AgentPage() {
   };
 
   return (
+    <div className="flex h-full w-full">
+      <AgentConversationSidebar
+        conversations={conversations}
+        activeId={activeId}
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((value) => !value)}
+        onNew={newChat}
+        onSelect={setActiveId}
+        onDelete={deleteChat}
+      />
     <div
-      className="flex flex-col h-full w-full relative"
+      className="flex flex-1 min-w-0 flex-col h-full relative"
       onDragOver={(e) => {
         e.preventDefault();
         setIsDragging(true);
@@ -291,34 +505,16 @@ export default function AgentPage() {
           {active?.title ?? 'New chat'}
         </div>
         <div className="flex items-center gap-1.5">
-          <IconButton onClick={() => setHistoryOpen((v) => !v)} label="History">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-            </svg>
-          </IconButton>
-          <IconButton onClick={newChat} label="New chat">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </IconButton>
+          <AgentSwitch />
+          {!isEmpty && (
+            <CopyIconButton onCopy={copyAll} label="Copy conversation" />
+          )}
         </div>
       </div>
 
-      {historyOpen && (
-        <HistoryPanel
-          conversations={conversations}
-          activeId={activeId}
-          onSelect={(id) => {
-            setActiveId(id);
-            setHistoryOpen(false);
-          }}
-          onDelete={deleteChat}
-          onClose={() => setHistoryOpen(false)}
-        />
-      )}
-
       <div ref={scrollRef} className="flex-1 overflow-y-auto pt-12">
         <div className="max-w-2xl mx-auto w-full px-5">
+          <ProactiveBriefing />
           {isEmpty ? (
             <div className="flex flex-col items-center justify-center min-h-[65vh] text-center">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
@@ -343,7 +539,14 @@ export default function AgentPage() {
           ) : (
             <div className="flex flex-col gap-4 pb-6">
               {messages.map((m) => (
-                <MessageView key={m.id} message={m} />
+                <MessageView
+                  key={m.id}
+                  message={m}
+                  approvalPending={approvalPending}
+                  onResolveApproval={(toolCall, decision) =>
+                    void resolveApproval(m.id, toolCall, decision)
+                  }
+                />
               ))}
             </div>
           )}
@@ -351,7 +554,7 @@ export default function AgentPage() {
       </div>
 
       <div className="w-full">
-        <form onSubmit={onSubmit} className="max-w-2xl mx-auto w-full px-5 pt-2 pb-24">
+        <form onSubmit={onSubmit} className="max-w-2xl mx-auto w-full px-5 pt-2 pb-6">
           {pendingFiles.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-2">
               {pendingFiles.map((a) => (
@@ -439,101 +642,239 @@ export default function AgentPage() {
         </div>
       )}
     </div>
+    </div>
   );
 }
 
 /* ─────────── subcomponents ─────────── */
 
-function IconButton({
-  onClick,
+function CopyIconButton({
+  onCopy,
   label,
-  children,
+  className,
 }: {
-  onClick: () => void;
+  onCopy: () => Promise<void>;
   label: string;
-  children: React.ReactNode;
+  className?: string;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  const handle = async () => {
+    await onCopy();
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <button
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="btn-clay-secondary h-7 w-7 text-gray-600"
-      style={{ borderRadius: '0.5rem', padding: 0 }}
+      onClick={handle}
+      aria-label={copied ? 'Copied!' : label}
+      title={copied ? 'Copied!' : label}
+      className={`h-6 w-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all ${className ?? ''}`}
     >
-      {children}
+      {copied ? (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+        </svg>
+      )}
     </button>
   );
 }
 
-function HistoryPanel({
-  conversations,
-  activeId,
-  onSelect,
-  onDelete,
-  onClose,
-}: {
-  conversations: Conversation[];
-  activeId: string | null;
-  onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
-  onClose: () => void;
-}) {
+type BriefingItem = {
+  kind: string;
+  title: string;
+  detail: string;
+  href: string;
+  priority: 'info' | 'warning' | 'urgent';
+};
+
+type Briefing = {
+  id: string;
+  period: 'daily' | 'weekly';
+  items: BriefingItem[];
+  createdAt: string;
+};
+
+function ProactiveBriefing() {
+  const [briefing, setBriefing] = useState<Briefing | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      const next = await api.post<Briefing>('/agent/briefings/refresh');
+      setBriefing(next);
+      setExpanded(true);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    void api.get<Briefing | undefined>('/agent/briefings/latest')
+      .then(async (latest) => {
+        if (!active) return;
+        if (latest) {
+          setBriefing(latest);
+          return;
+        }
+        const initial = await api.post<Briefing>('/agent/briefings/refresh');
+        if (active) setBriefing(initial);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  if (!briefing) return null;
+  const urgentCount = briefing.items.filter((item) => item.priority === 'urgent').length;
+
   return (
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div
-        className="absolute top-11 right-4 z-50 w-64 rounded-xl bg-white overflow-hidden"
-        style={{
-          border: '1px solid rgba(209,213,219,0.9)',
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,1), 0 8px 24px rgba(0,0,0,0.10)',
-        }}
-      >
-        <div className="px-3 py-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100">
-          Recent chats
-        </div>
-        <div className="max-h-80 overflow-y-auto">
-          {conversations.length === 0 ? (
-            <div className="px-3 py-6 text-xs text-gray-400 text-center">
-              No chats yet
-            </div>
-          ) : (
-            conversations.map((c) => (
-              <div
-                key={c.id}
-                className={`group flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-gray-50 ${
-                  c.id === activeId ? 'bg-primary/5' : ''
-                }`}
-                onClick={() => onSelect(c.id)}
-              >
-                <span className="flex-1 truncate text-gray-800">{c.title}</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(c.id);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity"
-                  aria-label="Delete chat"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" />
-                  </svg>
-                </button>
-              </div>
-            ))
-          )}
-        </div>
+    <section className="mb-5 rounded-xl border border-primary/15 bg-primary/[0.03] px-3.5 py-3 text-xs">
+      <div className="flex items-center gap-2">
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 text-sm">✦</span>
+        <button type="button" onClick={() => setExpanded((value) => !value)} className="min-w-0 flex-1 text-left">
+          <p className="font-semibold text-gray-900">Relay briefing</p>
+          <p className="mt-0.5 truncate text-gray-500">{urgentCount ? `${urgentCount} urgent item${urgentCount === 1 ? '' : 's'} need attention` : 'Your latest workspace check is ready.'}</p>
+        </button>
+        <button type="button" onClick={() => void refresh()} disabled={refreshing} className="rounded-md px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+        </button>
       </div>
-    </>
+      {expanded && (
+        <div className="mt-3 space-y-1.5 border-t border-primary/10 pt-2.5">
+          {briefing.items.map((item, index) => (
+            <a key={`${item.kind}-${index}`} href={item.href} className="block rounded-lg bg-white px-2.5 py-2 hover:bg-gray-50">
+              <p className={`font-semibold ${item.priority === 'urgent' ? 'text-red-700' : item.priority === 'warning' ? 'text-amber-700' : 'text-gray-800'}`}>{item.title}</p>
+              <p className="mt-0.5 leading-relaxed text-gray-500">{item.detail}</p>
+            </a>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
-function MessageView({ message }: { message: Message }) {
+function AgentConversationSidebar({
+  conversations,
+  activeId,
+  collapsed,
+  onToggle,
+  onNew,
+  onSelect,
+  onDelete,
+}: {
+  conversations: Conversation[];
+  activeId: string | null;
+  collapsed: boolean;
+  onToggle: () => void;
+  onNew: () => void;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <aside className={`hidden md:flex shrink-0 flex-col border-r border-gray-200 bg-gray-50/70 transition-[width,padding] duration-200 ${collapsed ? 'w-12 p-2' : 'w-64 p-3'}`}>
+      <div className={`flex items-center gap-2 px-1 ${collapsed ? 'mb-2 justify-center' : 'mb-4'}`}>
+        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
+          <RelayGlyph size={13} />
+        </div>
+        {!collapsed && <span className="flex-1 text-sm font-semibold text-gray-900">Relay Agent</span>}
+        {!collapsed && <SidebarToggle collapsed={false} onToggle={onToggle} />}
+      </div>
+      {!collapsed && <button
+        type="button"
+        onClick={onNew}
+        className="mb-4 flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:border-primary/40 hover:bg-primary/5"
+      >
+        <span className="text-base leading-none">+</span> New chat
+      </button>}
+      {!collapsed && <>
+      <p className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Chats</p>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {conversations.length === 0 ? (
+          <p className="px-1 py-4 text-xs text-gray-400">Your saved chats will appear here.</p>
+        ) : (
+          conversations.map((conversation) => (
+            <div
+              key={conversation.id}
+              className={`group mb-0.5 flex items-center gap-2 rounded-md px-2 py-2 text-xs transition-colors ${
+                conversation.id === activeId
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onSelect(conversation.id)}
+                className="min-w-0 flex-1 truncate text-left"
+                title={conversation.title}
+              >
+                {conversation.title}
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(conversation.id)}
+                className="text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500"
+                aria-label={`Delete ${conversation.title}`}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" />
+                </svg>
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+      </>}
+      {collapsed && <div className="flex-1" />}
+      {collapsed && <div className="flex justify-center pt-2"><SidebarToggle collapsed onToggle={onToggle} /></div>}
+    </aside>
+  );
+}
+
+function SidebarToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-white hover:text-gray-700"
+      title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points={collapsed ? '9 18 15 12 9 6' : '15 18 9 12 15 6'} />
+      </svg>
+    </button>
+  );
+}
+
+function MessageView({
+  message,
+  approvalPending,
+  onResolveApproval,
+}: {
+  message: Message;
+  approvalPending: string | null;
+  onResolveApproval: (toolCall: ToolCall, decision: 'approve' | 'reject') => void;
+}) {
   const isUser = message.role === 'user';
   if (isUser) {
     return (
-      <div className="flex justify-end">
+      <div className="group flex justify-end items-end gap-2">
+        {message.content && (
+          <CopyIconButton
+            onCopy={async () => navigator.clipboard.writeText(message.content)}
+            label="Copy message"
+            className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mb-0.5"
+          />
+        )}
         <div className="max-w-[82%] flex flex-col items-end gap-1.5">
           {message.attachments && message.attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5 justify-end">
@@ -562,37 +903,41 @@ function MessageView({ message }: { message: Message }) {
     );
   }
 
-  const hasThoughts =
-    (message.reasoning && message.reasoning.length > 0) ||
-    (message.toolCalls && message.toolCalls.length > 0);
-  const isStreaming = !message.content && !hasThoughts;
+  const hasReasoning = Boolean(message.reasoning && message.reasoning.length > 0);
+  const hasActions = Boolean(message.toolCalls && message.toolCalls.length > 0);
+  const isStreaming = !message.content && !hasReasoning && !hasActions;
 
   return (
-    <div className="flex flex-col gap-2">
-      {hasThoughts && (
-        <ThoughtsBlock
-          reasoning={message.reasoning}
-          toolCalls={message.toolCalls}
+    <div className="group flex flex-col gap-2">
+      {hasReasoning && <ReasoningBlock reasoning={message.reasoning!} />}
+      {hasActions && (
+        <ActionsBlock
+          toolCalls={message.toolCalls!}
+          approvalPending={approvalPending}
+          onResolveApproval={onResolveApproval}
         />
       )}
       {isStreaming ? (
         <ThinkingIndicator />
       ) : (
-        <Markdown text={message.content} />
+        <>
+          <Markdown text={message.content} />
+          {message.content && (
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+              <CopyIconButton
+                onCopy={async () => navigator.clipboard.writeText(message.content)}
+                label="Copy response"
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-function ThoughtsBlock({
-  reasoning,
-  toolCalls,
-}: {
-  reasoning?: string;
-  toolCalls?: ToolCall[];
-}) {
+function ReasoningBlock({ reasoning }: { reasoning: string }) {
   const [open, setOpen] = useState(false);
-  const running = toolCalls?.some((t) => t.status === 'running');
   return (
     <div className="text-xs">
       <button
@@ -602,47 +947,356 @@ function ThoughtsBlock({
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
           <polyline points="9 18 15 12 9 6" />
         </svg>
-        <span className="font-medium">
-          {running ? 'Thinking…' : 'Thoughts'}
-        </span>
+        <span className="font-medium">Reasoning</span>
       </button>
       {open && (
-        <div className="mt-1.5 pl-3 border-l-2 border-gray-200 flex flex-col gap-1.5">
-          {toolCalls && toolCalls.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {toolCalls.map((tc) => (
-                <ToolChip key={tc.id} tc={tc} />
-              ))}
-            </div>
-          )}
-          {reasoning && (
-            <div className="text-gray-500 whitespace-pre-wrap leading-relaxed">
-              {reasoning}
-            </div>
-          )}
+        <div className="mt-1.5 pl-3 border-l-2 border-gray-200 text-gray-500 whitespace-pre-wrap leading-relaxed">
+          {reasoning}
         </div>
       )}
     </div>
   );
 }
 
+function ActionsBlock({
+  toolCalls,
+  approvalPending,
+  onResolveApproval,
+}: {
+  toolCalls: ToolCall[];
+  approvalPending: string | null;
+  onResolveApproval: (toolCall: ToolCall, decision: 'approve' | 'reject') => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const running = toolCalls.some((toolCall) => toolCall.status === 'running');
+  const receipts = toolCalls.filter(
+    (toolCall) =>
+      toolCall.status === 'running' ||
+      toolCall.status === 'done' ||
+      toolCall.status === 'error',
+  );
+  return (
+    <div className="text-xs">
+      <button
+        onClick={() => setOpen((value) => !value)}
+        className="inline-flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        <span className="font-medium">{running ? 'Working…' : 'Actions'}</span>
+      </button>
+      {(open || receipts.length > 0 || toolCalls.some((toolCall) => toolCall.status === 'awaiting_approval')) && (
+        <div className="mt-1.5 pl-3 border-l-2 border-gray-200 flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
+            {receipts.map((toolCall) => (
+              <ActionResultCard key={toolCall.id} toolCall={toolCall} />
+            ))}
+          </div>
+          {open && (
+            <div className="flex flex-wrap gap-1">
+              {toolCalls.map((toolCall) => <ToolChip key={toolCall.id} tc={toolCall} />)}
+            </div>
+          )}
+          {toolCalls
+            .filter((toolCall) => toolCall.status === 'awaiting_approval' && toolCall.approval)
+            .map((toolCall) => (
+              <ApprovalCard
+                key={toolCall.id}
+                toolCall={toolCall}
+                busy={approvalPending === toolCall.approval!.id}
+                onResolve={onResolveApproval}
+              />
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type ActionReceipt = {
+  title: string;
+  detail: string;
+  href?: string;
+  linkLabel?: string;
+};
+
+function ActionResultCard({ toolCall }: { toolCall: ToolCall }) {
+  const campaignPlan = toolCall.name === 'create_campaign_plan' && toolCall.status === 'done'
+    ? readRecord(toolCall.result)
+    : undefined;
+  if (campaignPlan?.id) return <CampaignPlanCard initialPlan={campaignPlan} />;
+
+  const receipt = describeAction(toolCall);
+  const isError = toolCall.status === 'error';
+  const isRunning = toolCall.status === 'running';
+  return (
+    <div
+      className={`max-w-md rounded-lg border px-3 py-2 text-xs ${
+        isError
+          ? 'border-red-200 bg-red-50 text-red-800'
+          : isRunning
+            ? 'border-primary/20 bg-primary/5 text-gray-700'
+            : 'border-gray-200 bg-white text-gray-700'
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <span
+          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+            isError ? 'bg-red-100 text-red-600' : isRunning ? 'bg-primary/15 text-primary' : 'bg-green-100 text-green-600'
+          }`}
+        >
+          {isError ? '!' : isRunning ? '…' : '✓'}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-gray-900">{receipt.title}</p>
+          <p className="mt-0.5 leading-relaxed text-gray-500">{receipt.detail}</p>
+          {receipt.href && (
+            <a href={receipt.href} className="mt-1.5 inline-block text-[11px] font-semibold text-primary hover:underline">
+              {receipt.linkLabel}
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CampaignPlanCard({ initialPlan }: { initialPlan: Record<string, unknown> }) {
+  const planId = readString(initialPlan.id);
+  const [plan, setPlan] = useState(initialPlan);
+  const [approving, setApproving] = useState(false);
+
+  useEffect(() => {
+    if (!planId) return;
+    void api.get<Record<string, unknown>>(`/campaign-plans/${planId}`)
+      .then((latest) => setPlan(latest))
+      .catch(() => undefined);
+  }, [planId]);
+
+  const posts = Array.isArray(plan.posts)
+    ? plan.posts.map(readRecord).filter((post): post is Record<string, unknown> => Boolean(post))
+    : [];
+  const status = readString(plan.status) ?? 'Pending';
+  const scheduledCount = posts.filter((post) => Boolean(readString(post.scheduledAt))).length;
+  const isPending = status === 'Pending';
+  const isCompleted = status === 'Completed';
+
+  const approve = async () => {
+    if (!planId || !isPending || approving) return;
+    setApproving(true);
+    try {
+      const executed = await api.post<Record<string, unknown>>(`/campaign-plans/${planId}/approve`);
+      setPlan(executed);
+    } catch (error: any) {
+      setPlan((current) => ({ ...current, status: 'Failed', error: error?.message ?? 'Campaign execution failed' }));
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  return (
+    <div className="max-w-md rounded-xl border border-primary/20 bg-white p-3 text-xs shadow-sm">
+      <div className="flex items-start gap-2">
+        <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-bold ${isCompleted ? 'bg-green-100 text-green-600' : status === 'Failed' ? 'bg-red-100 text-red-600' : 'bg-primary/10 text-primary'}`}>
+          {isCompleted ? '✓' : status === 'Failed' ? '!' : '✦'}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-gray-900">{isCompleted ? 'Campaign created' : status === 'Failed' ? 'Campaign needs attention' : 'Campaign plan ready'}</p>
+          <p className="mt-0.5 text-gray-500">{readString(plan.name) ?? 'Untitled campaign'} · {posts.length} post{posts.length === 1 ? '' : 's'}{scheduledCount ? ` · ${scheduledCount} scheduled` : ''}</p>
+          {readString(plan.objective) && <p className="mt-1.5 leading-relaxed text-gray-600">{readString(plan.objective)}</p>}
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-1.5 border-t border-gray-100 pt-2.5">
+        {posts.map((post, index) => {
+          const scheduledAt = readString(post.scheduledAt);
+          return (
+            <div key={`${readString(post.title) ?? 'post'}-${index}`} className="rounded-md bg-gray-50 px-2 py-1.5">
+              <p className="truncate font-medium text-gray-700">{index + 1}. {readString(post.title) ?? 'Untitled post'}</p>
+              <p className="mt-0.5 text-[11px] text-gray-400">{scheduledAt ? `Schedule: ${formatTimestamp(scheduledAt)}` : 'Create as draft'}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {isPending && (
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <p className="text-[11px] text-gray-400">Nothing will be created until you approve.</p>
+          <button type="button" onClick={() => void approve()} disabled={approving} className="btn-clay-primary h-7 shrink-0 px-2.5 text-[11px] disabled:opacity-50">
+            {approving ? 'Creating…' : 'Approve & create'}
+          </button>
+        </div>
+      )}
+      {isCompleted && <a href="/queue" className="mt-3 inline-block text-[11px] font-semibold text-primary hover:underline">View post queue</a>}
+      {status === 'Failed' && <p className="mt-3 text-[11px] text-red-600">{readString(plan.error) ?? 'Relay could not create this campaign.'}</p>}
+    </div>
+  );
+}
+
+function describeAction(toolCall: ToolCall): ActionReceipt {
+  const args = readJsonObject(toolCall.args);
+  const result = readRecord(toolCall.result);
+  const failed = toolCall.status === 'error';
+  if (failed) {
+    return {
+      title: `Couldn’t ${humanizeToolName(toolCall.name)}`,
+      detail: toolCall.error ?? 'Relay could not complete this action.',
+    };
+  }
+  if (toolCall.status === 'running') {
+    return {
+      title: `${capitalize(humanizeToolName(toolCall.name))}…`,
+      detail: 'Relay is working on this now.',
+    };
+  }
+
+  const postTitle = readString(result?.title) ?? readString(args.title);
+  const postId = readString(result?.id) ?? readString(args.postId);
+  const platforms = platformsFromResult(result);
+  if (toolCall.name === 'create_post') {
+    return {
+      title: 'Draft created',
+      detail: postTitle ? `“${postTitle}” is ready to review.` : 'Your post draft is ready to review.',
+      href: postId ? `/posts/${postId}/edit` : undefined,
+      linkLabel: postId ? 'Open draft' : undefined,
+    };
+  }
+  if (toolCall.name === 'schedule_post') {
+    const scheduledAt = readString(args.scheduledAt) ?? readString(result?.scheduledAt);
+    return {
+      title: 'Post scheduled',
+      detail: scheduledAt
+        ? `${postTitle ? `“${postTitle}” is ` : ''}scheduled for ${formatTimestamp(scheduledAt)}${platforms ? ` on ${platforms}` : ''}.`
+        : 'The post is scheduled.',
+      href: '/queue',
+      linkLabel: 'View queue',
+    };
+  }
+  if (toolCall.name === 'publish_post_now') {
+    return {
+      title: result?.status === 'Published' ? 'Post published' : 'Publishing completed',
+      detail: `${postTitle ? `“${postTitle}” ` : 'Your post '}${platforms ? `was sent to ${platforms}.` : 'was sent to its selected accounts.'}`,
+      href: '/queue',
+      linkLabel: 'View post status',
+    };
+  }
+  if (toolCall.name === 'list_connected_accounts' || toolCall.name === 'list_brands') {
+    const items = Array.isArray(toolCall.result) ? toolCall.result : [];
+    const noun = toolCall.name === 'list_brands' ? 'brand' : 'connected account';
+    return {
+      title: `${items.length} ${noun}${items.length === 1 ? '' : 's'} found`,
+      detail: items.length ? 'Relay can use these details for the next step.' : `No ${noun}s are available yet.`,
+    };
+  }
+  if (toolCall.name === 'reply_to_comment') {
+    return { title: 'Reply sent', detail: 'Your reply was posted to the conversation.' };
+  }
+  return {
+    title: `${capitalize(humanizeToolName(toolCall.name))} completed`,
+    detail: 'Relay completed this action successfully.',
+  };
+}
+
+function readJsonObject(value: string): Record<string, unknown> {
+  try {
+    return readRecord(JSON.parse(value)) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function platformsFromResult(result?: Record<string, unknown>): string | undefined {
+  const targets = result?.targets;
+  if (!Array.isArray(targets)) return undefined;
+  const platforms = targets
+    .map((target) => readRecord(target))
+    .map((target) => readRecord(target?.account)?.platform)
+    .filter((platform): platform is string => typeof platform === 'string');
+  return [...new Set(platforms)].join(', ') || undefined;
+}
+
+function humanizeToolName(name: string): string {
+  return name.replace(/_/g, ' ').replace(/^(list|get|create|update|publish|schedule|sync) /, '$1 ');
+}
+
+function capitalize(value: string): string {
+  return value ? value[0].toUpperCase() + value.slice(1) : value;
+}
+
+function formatTimestamp(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
 function ToolChip({ tc }: { tc: ToolCall }) {
   const color =
     tc.status === 'error'
       ? 'text-red-600 border-red-200'
+      : tc.status === 'awaiting_approval'
+        ? 'text-amber-700 border-amber-200'
       : tc.status === 'running'
         ? 'text-primary border-primary/30'
         : 'text-gray-600 border-gray-200';
+  const title = tc.error
+    ? `${tc.name} failed: ${tc.error}\n\nArguments: ${tc.args}`
+    : tc.args;
   return (
     <span
       className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-white ${color}`}
-      title={tc.args}
+      title={title}
     >
       {tc.status === 'running' && (
         <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />
       )}
       {tc.name}
     </span>
+  );
+}
+
+function ApprovalCard({
+  toolCall,
+  busy,
+  onResolve,
+}: {
+  toolCall: ToolCall;
+  busy: boolean;
+  onResolve: (toolCall: ToolCall, decision: 'approve' | 'reject') => void;
+}) {
+  const approval = toolCall.approval!;
+  return (
+    <div className="max-w-md rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-gray-700">
+      <div className="font-semibold text-gray-900">Approval required</div>
+      <p className="mt-1 leading-relaxed">{approval.summary}</p>
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onResolve(toolCall, 'approve')}
+          className="rounded-md bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+        >
+          {busy ? 'Working…' : 'Approve'}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onResolve(toolCall, 'reject')}
+          className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 disabled:opacity-50"
+        >
+          Reject
+        </button>
+      </div>
+    </div>
   );
 }
 

@@ -41,6 +41,20 @@ enum CompetitorSource {
   RapidApi
 }
 
+enum AgentApprovalStatus {
+  Pending
+  Approved
+  Rejected
+  Expired
+}
+
+enum CampaignPlanStatus {
+  Pending
+  Executing
+  Completed
+  Failed
+}
+
 model User {
   id                 String                @id @default(cuid())
   email              String                @unique
@@ -53,6 +67,11 @@ model User {
   memberships        Membership[]
   posts              Post[]
   passwordResetTokens PasswordResetToken[]
+  agentApprovals     AgentApproval[]
+  agentConversations AgentConversation[]
+  mcpAccessTokens    McpAccessToken[]
+  campaignPlans      CampaignPlan[]
+  agentBriefings     AgentBriefing[]
 }
 
 model PasswordResetToken {
@@ -84,6 +103,9 @@ model Brand {
   commentAiConfig CommentAiConfig?
   competitors  Competitor[]
   trendCaches  TrendCache[]
+  conversionRules ConversionRule[]
+  agentMemory     BrandAgentMemory?
+  campaignPlans   CampaignPlan[]
 }
 
 model Template {
@@ -273,6 +295,36 @@ model TrendCache {
   @@index([brandId, platform])
 }
 
+model ConversionRule {
+  id              String            @id @default(cuid())
+  brandId         String
+  name            String
+  conversionType  String            @default("LEAD")
+  liConversionUrn String?
+  liAdAccountUrn  String
+  isEnabled       Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  brand           Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  events          ConversionEvent[]
+
+  @@index([brandId])
+}
+
+model ConversionEvent {
+  id                   String         @id @default(cuid())
+  ruleId               String
+  occurredAt           DateTime
+  valueAmount          Float?
+  valueCurrency        String?
+  emailHash            String?
+  pageUrl              String?        @db.Text
+  createdAt            DateTime       @default(now())
+  rule                 ConversionRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, occurredAt])
+}
+
 model AnalyticsSnapshot {
   id          String   @id @default(cuid())
   targetId    String
@@ -285,4 +337,96 @@ model AnalyticsSnapshot {
   saves       Int      @default(0)
   clicks      Int      @default(0)
   target      PostPlatformTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+}
+
+model AgentApproval {
+  id             String              @id @default(cuid())
+  userId         String
+  status         AgentApprovalStatus @default(Pending)
+  toolName       String
+  toolCallId     String
+  toolArgs       Json
+  conversation   Json
+  result         Json?
+  error          String?             @db.Text
+  createdAt      DateTime            @default(now())
+  resolvedAt     DateTime?
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model AgentConversation {
+  id        String   @id
+  userId    String
+  title     String
+  messages  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+}
+
+model McpAccessToken {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  tokenHash   String    @unique
+  tokenPrefix String
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model CampaignPlan {
+  id              String             @id @default(cuid())
+  userId          String
+  brandId         String
+  name            String
+  objective       String?            @db.Text
+  platform        String?
+  posts           Json
+  status          CampaignPlanStatus @default(Pending)
+  executionResult Json?
+  error           String?            @db.Text
+  createdAt       DateTime           @default(now())
+  executedAt      DateTime?
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand           Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([brandId, status])
+}
+
+model AgentBriefing {
+  id        String   @id @default(cuid())
+  userId    String
+  period    String
+  dateKey   String
+  items     Json
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period, dateKey])
+  @@index([userId, createdAt])
+}
+
+model BrandAgentMemory {
+  id                    String   @id @default(cuid())
+  brandId               String   @unique
+  preferredPlatforms    Json?
+  preferredPostingTimes String?  @db.Text
+  defaultHashtags       String?  @db.Text
+  defaultCta            String?  @db.Text
+  forbiddenPhrases      String?  @db.Text
+  approvalMode          String   @default("always")
+  notes                 String?  @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  brand                 Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 }

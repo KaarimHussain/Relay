@@ -1,5 +1,7 @@
-﻿import { AnalyticsView } from '@/components/analytics/AnalyticsView';
+import { AnalyticsView } from '@/components/analytics/AnalyticsView';
 import { CompetitorAnalysis } from '@/components/analytics/CompetitorAnalysis';
+import { LinkedInAdLibrary } from '@/components/analytics/LinkedInAdLibrary';
+import { ConversionsPanel } from '@/components/analytics/ConversionsPanel';
 
 export default function AnalyticsPage() {
   return (
@@ -13,6 +15,8 @@ export default function AnalyticsPage() {
 
       <AnalyticsView />
       <CompetitorAnalysis />
+      <LinkedInAdLibrary />
+      <ConversionsPanel />
     </div>
   );
 }

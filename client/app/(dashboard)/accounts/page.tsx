@@ -79,8 +79,10 @@ function LinkedInPicker() {
             <p className="text-xs text-gray-500 mt-0.5">Select which accounts to connect to Relay.</p>
           </div>
         </div>
+
         <div className="p-5 flex flex-col gap-2">
           {submitError && <p className="text-xs text-red-600 font-medium mb-1">{submitError}</p>}
+
           <label className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
             <input type="checkbox" checked={selections.has('person')} onChange={() => toggle('person')} className="w-4 h-4 accent-blue-600 shrink-0" />
             <User size={15} className="text-gray-400 shrink-0" />
@@ -89,6 +91,7 @@ function LinkedInPicker() {
               <p className="text-xs text-gray-400">Personal profile</p>
             </div>
           </label>
+
           {options.orgs.map((org) => (
             <label key={org.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
               <input type="checkbox" checked={selections.has(org.id)} onChange={() => toggle(org.id)} className="w-4 h-4 accent-blue-600 shrink-0" />
@@ -100,6 +103,7 @@ function LinkedInPicker() {
             </label>
           ))}
         </div>
+
         <div className="flex items-center justify-end gap-3 px-5 py-4 bg-gray-50 border-t border-gray-100 rounded-b-xl">
           <button onClick={() => router.replace('/accounts')} className="text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors">Cancel</button>
           <button onClick={handleConfirm} disabled={count === 0 || submitting}

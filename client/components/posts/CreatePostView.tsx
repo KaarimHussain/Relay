@@ -7,7 +7,7 @@ import {
   ArrowLeft, Sparkles, Send, Clock, FileText,
   ImageIcon, Film, Plus, X as XIcon,
   Check, Heart, MessageCircle, Share2, Repeat2, Bookmark,
-  RefreshCw, AlertCircle, Loader2, FolderOpen,
+  RefreshCw, AlertCircle, Loader2, FolderOpen, LayoutTemplate,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PlatformBadge } from '@/components/ui/platform-icons';
@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/toast';
 import { useBrandStore } from '@/store/brand';
 import { useAccountStore } from '@/store/account';
 import { usePostStore } from '@/store/post';
+import { useTemplateStore } from '@/store/template';
 import { api, ApiError } from '@/lib/api';
 import { DateTimePicker } from '@/components/ui/date-time-picker';
 
@@ -75,6 +76,9 @@ export function CreatePostView() {
   const fetchAccounts = useAccountStore((s) => s.fetchAccounts);
   const accounts = allAccounts.filter((a) => a.status === 'Active');
   const { createPost, schedulePost, publishNow } = usePostStore();
+  const templates = useTemplateStore((s) => s.templates);
+  const templateStatus = useTemplateStore((s) => s.status);
+  const fetchTemplates = useTemplateStore((s) => s.fetchTemplates);
 
   // ─── Post state ─────────────────────────────────────────────────────────────
   const [title, setTitle] = useState('');
@@ -89,6 +93,7 @@ export function CreatePostView() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
 
   // ─── Media state ─────────────────────────────────────────────────────────────
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
@@ -106,6 +111,11 @@ export function CreatePostView() {
   useEffect(() => {
     if (activeBrand?.id) fetchAccounts(activeBrand.id);
   }, [activeBrand?.id, fetchAccounts]);
+
+  useEffect(() => {
+    if (activeBrand?.id) fetchTemplates(activeBrand.id);
+    setTemplatePickerOpen(false);
+  }, [activeBrand?.id, fetchTemplates]);
 
   useEffect(() => {
     const prefillCaption  = searchParams.get('caption');
@@ -137,6 +147,7 @@ export function CreatePostView() {
 
   // ─── Derived ──────────────────────────────────────────────────────────────────
   const selectedAccounts = accounts.filter((a) => selectedAccountIds.has(a.id));
+  const savedTemplates = templates.filter((template) => template.brandId === activeBrand?.id);
   const previewPlatform = activePreview || selectedAccounts[0]?.platform || 'Instagram';
 
   const mediaImages = mediaItems.filter(m => m.mimeType.startsWith('image/'));
@@ -499,6 +510,14 @@ export function CreatePostView() {
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Post Caption</label>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTemplatePickerOpen((open) => !open)}
+                  className="btn-clay-secondary h-6.5 px-2.5 text-[11px] font-semibold inline-flex items-center gap-1"
+                  aria-expanded={templatePickerOpen}
+                >
+                  <LayoutTemplate size={11} /> Add template
+                </button>
                 {selectedAccounts.map((acc) => {
                   const meta = PLATFORM_META[acc.platform];
                   if (!meta) return null;
@@ -515,6 +534,42 @@ export function CreatePostView() {
             <textarea value={caption} onChange={(e) => setCaption(e.target.value)}
               placeholder="Write your post content here…" rows={6}
               className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-3 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors leading-relaxed resize-none" />
+            {templatePickerOpen && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-2">
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Saved templates</span>
+                  <button type="button" onClick={() => setTemplatePickerOpen(false)} className="text-[11px] font-semibold text-gray-400 hover:text-gray-700">Close</button>
+                </div>
+                {templateStatus === 'loading' ? (
+                  <div className="flex items-center gap-2 px-2 py-3 text-xs text-gray-400"><Loader2 size={13} className="animate-spin" /> Loading templates…</div>
+                ) : savedTemplates.length === 0 ? (
+                  <p className="px-2 py-3 text-xs text-gray-400">No saved templates for this brand yet.</p>
+                ) : (
+                  <div className="max-h-48 space-y-1 overflow-y-auto">
+                    {savedTemplates.map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => {
+                          setCaption((current) => current.trim()
+                            ? `${current.trimEnd()}\n\n${template.caption}`
+                            : template.caption);
+                          setTemplatePickerOpen(false);
+                          toast(`${template.name} added to the caption`, 'success');
+                        }}
+                        className="w-full rounded-md border border-transparent px-2.5 py-2 text-left hover:border-orange-200 hover:bg-white transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-gray-700">{template.name}</span>
+                          <span className="shrink-0 text-[10px] text-gray-400">{template.category}</span>
+                        </div>
+                        <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-gray-400">{template.caption}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
@@ -553,7 +608,7 @@ export function CreatePostView() {
                   const rules = PLATFORM_MEDIA_RULES[acc.platform];
                   if (!rules) return null;
                   return (
-                    <span key={acc.platform} className="text-[10px] font-medium text-gray-400 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded">
+                    <span key={acc.id} className="text-[10px] font-medium text-gray-400 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded">
                       {acc.platform}: {rules.note}
                     </span>
                   );

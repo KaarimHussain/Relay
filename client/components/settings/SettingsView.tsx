@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import {
   User, Building2, Bell, CreditCard,
   Camera, Check, AlertTriangle, ChevronRight,
-  Zap, Shield, Loader2, X, Bot, Lock,
+  Zap, Shield, Loader2, X, Bot, Lock, Pencil,
+  KeyRound, Copy, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -17,7 +18,7 @@ import { api } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'brand' | 'comments-ai' | 'notifications' | 'billing';
+type Tab = 'profile' | 'brand' | 'agent-access' | 'comments-ai' | 'notifications' | 'billing';
 
 // ─── Shared form primitives ───────────────────────────────────────────────────
 
@@ -294,7 +295,7 @@ function ProfileTab() {
           <button
             onClick={handlePasswordChange}
             disabled={pwSaving || !curPw || !newPw || !confirmPw}
-            className="self-start h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            className="btn-clay-primary self-start h-9 px-4 text-[13px] gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
           >
             {pwSaving && <Loader2 size={13} className="animate-spin" />}
             Update password
@@ -308,7 +309,7 @@ function ProfileTab() {
         <p className="text-[13px] text-gray-400 mb-4">Permanently delete your account and all associated data.</p>
         <button
           onClick={() => setShowDeleteModal(true)}
-          className="h-9 px-4 text-[13px] font-medium text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-2"
+          className="btn-clay-danger-outline h-9 px-4 text-[13px] gap-2"
         >
           <AlertTriangle size={14} /> Delete account
         </button>
@@ -392,7 +393,7 @@ function DeleteAccountModal({
           <button
             onClick={handleConfirm}
             disabled={!canDelete}
-            className="h-9 px-4 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+            className="btn-clay-danger h-9 px-4 text-xs gap-1.5"
           >
             {loading && <Loader2 size={13} className="animate-spin" />}
             Delete my account
@@ -416,32 +417,186 @@ const BRAND_COLORS = [
   { bg: 'bg-slate-500',  hex: '#64748B' },
 ];
 
+function DeleteBrandModal({
+  brandName,
+  onClose,
+  onConfirm,
+}: {
+  brandName: string;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const { toast } = useToast();
+  const [confirmText, setConfirmText] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const canDelete = confirmText.trim().toUpperCase() === 'DELETE' && !loading;
+
+  const handleConfirm = async () => {
+    if (!canDelete) return;
+    setLoading(true);
+    try {
+      await onConfirm();
+    } catch (err: any) {
+      toast(err?.message ?? 'Failed to delete brand', 'error');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]" onClick={onClose}>
+      <div
+        className="w-full max-w-[420px] bg-white rounded-xl border border-gray-200 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 p-5 pb-4 border-b border-gray-100">
+          <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+            <AlertTriangle size={16} className="text-red-500" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-[15px] font-bold text-gray-900">Delete "{brandName}"</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              This permanently deletes the brand, all its posts, schedules, media, and connected social accounts. This cannot be undone.
+            </p>
+          </div>
+          <button onClick={onClose} className="shrink-0 text-gray-400 hover:text-gray-600 -mt-1 -mr-1 p-1">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-5 flex flex-col gap-4">
+          <Field label='Type "DELETE" to confirm'>
+            <TextInput value={confirmText} onChange={setConfirmText} placeholder="DELETE" />
+          </Field>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-5 py-4 bg-gray-50 border-t border-gray-100 rounded-b-xl">
+          <button onClick={onClose} className="text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!canDelete}
+            className="btn-clay-danger h-9 px-4 text-xs gap-1.5"
+          >
+            {loading && <Loader2 size={13} className="animate-spin" />}
+            Delete brand
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const PLATFORM_COLORS: Record<string, string> = {
+  Instagram: 'bg-pink-500',
+  Facebook: 'bg-blue-600',
+  X: 'bg-gray-900',
+  LinkedIn: 'bg-blue-700',
+  TikTok: 'bg-gray-800',
+};
+
+type AgentMemory = {
+  preferredPlatforms: string;
+  preferredPostingTimes: string;
+  defaultHashtags: string;
+  defaultCta: string;
+  forbiddenPhrases: string;
+  notes: string;
+};
+
+type StoredAgentMemory = Omit<AgentMemory, 'preferredPlatforms'> & {
+  preferredPlatforms?: string[];
+};
+
+const EMPTY_AGENT_MEMORY: AgentMemory = {
+  preferredPlatforms: '',
+  preferredPostingTimes: '',
+  defaultHashtags: '',
+  defaultCta: '',
+  forbiddenPhrases: '',
+  notes: '',
+};
+
+function toAgentMemoryForm(memory: StoredAgentMemory | null): AgentMemory {
+  return {
+    preferredPlatforms: memory?.preferredPlatforms?.join(', ') ?? '',
+    preferredPostingTimes: memory?.preferredPostingTimes ?? '',
+    defaultHashtags: memory?.defaultHashtags ?? '',
+    defaultCta: memory?.defaultCta ?? '',
+    forbiddenPhrases: memory?.forbiddenPhrases ?? '',
+    notes: memory?.notes ?? '',
+  };
+}
+
 function BrandTab() {
   const { toast } = useToast();
+  const router = useRouter();
   const activeBrand = useBrandStore((s) => s.activeBrand());
   const updateBrand = useBrandStore((s) => s.updateBrand);
+  const deleteBrand = useBrandStore((s) => s.deleteBrand);
+  const setBrandLogo = useBrandStore((s) => s.setBrandLogo);
   const allAccounts = useAccountStore((s) => s.accounts);
   const fetchAccounts = useAccountStore((s) => s.fetchAccounts);
-  const accountStatus = useAccountStore((s) => s.status);
   const activeAccounts = allAccounts.filter((a) => a.status === 'Active');
 
+  const logoFileRef = useRef<HTMLInputElement>(null);
+
+  // Derived: which preset swatch matches the saved hex (may be null for custom)
+  const matchedPreset = (hex: string) =>
+    BRAND_COLORS.find((c) => c.hex.toLowerCase() === hex.toLowerCase()) ?? null;
+
+  const [name, setName] = useState('');
+  const [colorHex, setColorHex] = useState('#F97316');
+  const [voiceTone, setVoiceTone] = useState('');
+  const [pillars, setPillars] = useState('');
+  const [savedName, setSavedName] = useState('');
+  const [savedColorHex, setSavedColorHex] = useState('#F97316');
+  const [savedVoiceTone, setSavedVoiceTone] = useState('');
+  const [savedPillars, setSavedPillars] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [agentMemory, setAgentMemory] = useState<AgentMemory>(EMPTY_AGENT_MEMORY);
+  const [savedAgentMemory, setSavedAgentMemory] = useState<AgentMemory>(EMPTY_AGENT_MEMORY);
+  const [agentMemoryLoading, setAgentMemoryLoading] = useState(true);
+  const [agentMemorySaving, setAgentMemorySaving] = useState(false);
+
+  // Sync form state whenever the active brand changes
   useEffect(() => {
-    if (activeBrand && accountStatus === 'idle') {
-      fetchAccounts(activeBrand.id);
-    }
+    if (!activeBrand) return;
+    setName(activeBrand.name);
+    setColorHex(activeBrand.colorHex ?? '#F97316');
+    setVoiceTone(activeBrand.voiceTone ?? '');
+    setPillars(activeBrand.pillars ?? '');
+    setSavedName(activeBrand.name);
+    setSavedColorHex(activeBrand.colorHex ?? '#F97316');
+    setSavedVoiceTone(activeBrand.voiceTone ?? '');
+    setSavedPillars(activeBrand.pillars ?? '');
+    setLogoPreview(activeBrand.logoUrl ?? null);
+    fetchAccounts(activeBrand.id);
   }, [activeBrand?.id]);
 
-  const defaultColor = BRAND_COLORS.find((c) => c.hex.toLowerCase() === activeBrand?.colorHex?.toLowerCase()) ?? BRAND_COLORS[0];
-
-  const [name, setName] = useState(activeBrand?.name ?? '');
-  const [color, setColor] = useState(defaultColor);
-  const [voiceTone, setVoiceTone] = useState(activeBrand?.voiceTone ?? '');
-  const [pillars, setPillars] = useState(activeBrand?.pillars ?? '');
-  const [savedName, setSavedName] = useState(activeBrand?.name ?? '');
-  const [savedColor, setSavedColor] = useState(defaultColor);
-  const [savedVoiceTone, setSavedVoiceTone] = useState(activeBrand?.voiceTone ?? '');
-  const [savedPillars, setSavedPillars] = useState(activeBrand?.pillars ?? '');
-  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!activeBrand) return;
+    let cancelled = false;
+    setAgentMemoryLoading(true);
+    void api.get<StoredAgentMemory | null>(`/brands/${activeBrand.id}/agent-memory`)
+      .then((stored) => {
+        if (cancelled) return;
+        const form = toAgentMemoryForm(stored);
+        setAgentMemory(form);
+        setSavedAgentMemory(form);
+      })
+      .catch((err: any) => {
+        if (!cancelled) toast(err?.message ?? 'Failed to load agent memory', 'error');
+      })
+      .finally(() => {
+        if (!cancelled) setAgentMemoryLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeBrand?.id]);
 
   if (!activeBrand) {
     return (
@@ -453,22 +608,24 @@ function BrandTab() {
 
   const dirty =
     name !== savedName ||
-    color.hex !== savedColor.hex ||
+    colorHex !== savedColorHex ||
     voiceTone !== savedVoiceTone ||
     pillars !== savedPillars;
 
+  const agentMemoryDirty = JSON.stringify(agentMemory) !== JSON.stringify(savedAgentMemory);
+
   const save = async () => {
-    if (!dirty || !activeBrand) return;
+    if (!dirty) return;
     setSaving(true);
     try {
       await updateBrand(activeBrand.id, {
         name: name.trim() || undefined,
-        colorHex: color.hex,
+        colorHex,
         voiceTone: voiceTone || undefined,
         pillars: pillars || undefined,
       });
       setSavedName(name);
-      setSavedColor(color);
+      setSavedColorHex(colorHex);
       setSavedVoiceTone(voiceTone);
       setSavedPillars(pillars);
       toast('Brand updated', 'success');
@@ -481,36 +638,100 @@ function BrandTab() {
 
   const discard = () => {
     setName(savedName);
-    setColor(savedColor);
+    setColorHex(savedColorHex);
     setVoiceTone(savedVoiceTone);
     setPillars(savedPillars);
   };
 
-  const initials = (name.trim() || '?').slice(0, 2).toUpperCase();
-
-  const PLATFORM_COLORS: Record<string, string> = {
-    Instagram: 'bg-pink-500',
-    Facebook: 'bg-blue-600',
-    X: 'bg-gray-900',
-    LinkedIn: 'bg-blue-700',
-    TikTok: 'bg-gray-800',
+  const saveAgentMemory = async () => {
+    if (!agentMemoryDirty || agentMemorySaving) return;
+    setAgentMemorySaving(true);
+    try {
+      await api.patch(`/brands/${activeBrand.id}/agent-memory`, {
+        ...agentMemory,
+        preferredPlatforms: agentMemory.preferredPlatforms
+          .split(',')
+          .map((platform) => platform.trim())
+          .filter(Boolean),
+      });
+      setSavedAgentMemory(agentMemory);
+      toast('Agent memory updated', 'success');
+    } catch (err: any) {
+      toast(err?.message ?? 'Failed to update agent memory', 'error');
+    } finally {
+      setAgentMemorySaving(false);
+    }
   };
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    if (!file.type.startsWith('image/')) { toast('Please choose an image file', 'error'); return; }
+    if (file.size > 5 * 1024 * 1024) { toast('Image must be under 5MB', 'error'); return; }
+
+    const localUrl = URL.createObjectURL(file);
+    setLogoPreview(localUrl);
+    setLogoUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const updated = await api.upload<{ logoUrl: string }>(`/brands/${activeBrand.id}/logo`, form);
+      setLogoPreview(updated.logoUrl);
+      setBrandLogo(activeBrand.id, updated.logoUrl);
+      toast('Logo updated', 'success');
+    } catch (err: any) {
+      setLogoPreview(activeBrand.logoUrl ?? null);
+      toast(err?.message ?? 'Failed to upload logo', 'error');
+    } finally {
+      setLogoUploading(false);
+      URL.revokeObjectURL(localUrl);
+    }
+  };
+
+  const initials = (name.trim() || '?').slice(0, 2).toUpperCase();
+  const selectedPreset = matchedPreset(colorHex);
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Brand preview */}
+      {/* Brand avatar / logo */}
       <div className="flex items-center gap-4 pb-6 border-b border-gray-100">
-        <div
-          className="w-14 h-14 rounded-xl flex items-center justify-center text-white text-[18px] font-bold"
-          style={{ backgroundColor: color.hex }}
-        >
-          {initials}
+        <div className="relative">
+          <div
+            className="w-14 h-14 rounded-xl flex items-center justify-center text-white text-[18px] font-bold overflow-hidden"
+            style={{ backgroundColor: colorHex }}
+          >
+            {logoPreview
+              ? <img src={logoPreview} alt="" className="w-full h-full object-cover" />
+              : initials
+            }
+            {logoUploading && (
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-xl">
+                <Loader2 size={16} className="animate-spin text-white" />
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => logoFileRef.current?.click()}
+            disabled={logoUploading}
+            className="absolute -bottom-1 -right-1 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            <Camera size={11} className="text-gray-500" />
+          </button>
+          <input ref={logoFileRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
         </div>
         <div>
           <p className="text-[15px] font-semibold text-gray-900">{savedName}</p>
           <p className="text-[13px] text-gray-400">
-            Active brand · {activeAccounts.length} connected account{activeAccounts.length !== 1 ? 's' : ''}
+            {activeBrand.role} · {activeAccounts.length} connected account{activeAccounts.length !== 1 ? 's' : ''}
           </p>
+          <button
+            onClick={() => logoFileRef.current?.click()}
+            disabled={logoUploading}
+            className="text-[12px] text-orange-500 hover:text-orange-600 mt-1 transition-colors disabled:opacity-50"
+          >
+            {logoUploading ? 'Uploading…' : 'Change logo'}
+          </button>
         </div>
       </div>
 
@@ -521,17 +742,39 @@ function BrandTab() {
 
       <div className="flex flex-col gap-2">
         <label className="text-[13px] font-medium text-gray-700">Brand color</label>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           {BRAND_COLORS.map(c => (
             <button
               key={c.hex}
               type="button"
-              onClick={() => setColor(c)}
+              onClick={() => setColorHex(c.hex)}
               className={cn('w-8 h-8 rounded-lg transition-all', c.bg,
-                color.hex === c.hex ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : 'hover:scale-105'
+                colorHex.toLowerCase() === c.hex.toLowerCase()
+                  ? 'ring-2 ring-offset-2 ring-gray-400 scale-110'
+                  : 'hover:scale-105'
               )}
             />
           ))}
+          {/* Custom hex picker */}
+          <label
+            className={cn(
+              'w-8 h-8 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:border-gray-400 transition-colors overflow-hidden relative',
+              !selectedPreset && 'border-solid border-gray-400 ring-2 ring-offset-2 ring-gray-400 scale-110'
+            )}
+            title="Custom color"
+          >
+            {!selectedPreset
+              ? <span className="w-full h-full block" style={{ backgroundColor: colorHex }} />
+              : <Pencil size={11} className="text-gray-400" />
+            }
+            <input
+              type="color"
+              value={colorHex}
+              onChange={(e) => setColorHex(e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            />
+          </label>
+          <span className="text-[12px] text-gray-400 font-mono">{colorHex.toUpperCase()}</span>
         </div>
       </div>
 
@@ -541,7 +784,7 @@ function BrandTab() {
           onChange={e => setVoiceTone(e.target.value.slice(0, 500))}
           placeholder="e.g. Friendly, professional, with a touch of humor…"
           rows={3}
-          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors resize-none"
+          className="input-clay px-3 py-2.5 text-[13px] resize-none"
         />
         <p className="text-[11px] text-gray-400 text-right -mt-1">{voiceTone.length}/500</p>
       </Field>
@@ -552,8 +795,9 @@ function BrandTab() {
           onChange={e => setPillars(e.target.value.slice(0, 500))}
           placeholder="e.g. Product updates, Industry tips, Behind the scenes…"
           rows={2}
-          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors resize-none"
+          className="input-clay px-3 py-2.5 text-[13px] resize-none"
         />
+        <p className="text-[11px] text-gray-400 text-right -mt-1">{pillars.length}/500</p>
       </Field>
 
       <SaveBar dirty={dirty} onSave={save} onDiscard={discard} />
@@ -563,6 +807,52 @@ function BrandTab() {
           <Loader2 size={13} className="animate-spin" /> Saving…
         </div>
       )}
+
+      {/* Agent operating memory */}
+      <div className="pt-4 border-t border-gray-100 flex flex-col gap-4">
+        <div>
+          <p className="text-[15px] font-semibold text-gray-900">Agent operating memory</p>
+          <p className="text-[13px] text-gray-400 mt-1">Relay Agent uses these preferences for this brand unless you give it a different instruction.</p>
+        </div>
+
+        {agentMemoryLoading ? (
+          <div className="flex items-center gap-2 text-xs text-gray-400"><Loader2 size={13} className="animate-spin" /> Loading agent memory…</div>
+        ) : (
+          <>
+            <Field label="Preferred platforms" hint="Separate platforms with commas.">
+              <TextInput value={agentMemory.preferredPlatforms} onChange={(preferredPlatforms) => setAgentMemory((current) => ({ ...current, preferredPlatforms }))} placeholder="LinkedIn, Instagram" />
+            </Field>
+            <Field label="Preferred posting times" hint="Tell the agent when this brand generally performs best.">
+              <TextInput value={agentMemory.preferredPostingTimes} onChange={(preferredPostingTimes) => setAgentMemory((current) => ({ ...current, preferredPostingTimes }))} placeholder="Weekdays, 10:00 AM PKT" />
+            </Field>
+            <Field label="Default hashtags">
+              <TextInput value={agentMemory.defaultHashtags} onChange={(defaultHashtags) => setAgentMemory((current) => ({ ...current, defaultHashtags }))} placeholder="#socialmedia #marketing" />
+            </Field>
+            <Field label="Default call to action">
+              <TextInput value={agentMemory.defaultCta} onChange={(defaultCta) => setAgentMemory((current) => ({ ...current, defaultCta }))} placeholder="Share your thoughts below." />
+            </Field>
+            <Field label="Forbidden phrases" hint="Words or claims the agent should avoid.">
+              <TextInput value={agentMemory.forbiddenPhrases} onChange={(forbiddenPhrases) => setAgentMemory((current) => ({ ...current, forbiddenPhrases }))} placeholder="guaranteed, cheap" />
+            </Field>
+            <Field label="Additional operating notes">
+              <textarea
+                value={agentMemory.notes}
+                onChange={(event) => setAgentMemory((current) => ({ ...current, notes: event.target.value }))}
+                placeholder="Use a practical, confident tone. Avoid competitor comparisons."
+                rows={3}
+                className="input-clay px-3 py-2.5 text-[13px] resize-none"
+              />
+            </Field>
+            <p className="text-[12px] text-gray-400">Publishing, scheduling, and public replies always require your approval.</p>
+            <SaveBar
+              dirty={agentMemoryDirty}
+              onSave={() => { void saveAgentMemory(); }}
+              onDiscard={() => setAgentMemory(savedAgentMemory)}
+            />
+            {agentMemorySaving && <div className="flex items-center gap-2 text-xs text-gray-400"><Loader2 size={13} className="animate-spin" /> Saving agent memory…</div>}
+          </>
+        )}
+      </div>
 
       {/* Connected accounts summary */}
       <div className="pt-4 border-t border-gray-100">
@@ -598,9 +888,175 @@ function BrandTab() {
         <p className="text-[13px] text-gray-400 mb-4">
           Deleting this brand removes all its posts, schedules, and connected accounts. This cannot be undone.
         </p>
-        <button className="h-9 px-4 text-[13px] font-medium text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-2">
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          disabled={activeBrand.role !== 'Owner'}
+          className="btn-clay-danger-outline h-9 px-4 text-[13px] gap-2"
+        >
           <AlertTriangle size={14} /> Delete brand
         </button>
+        {activeBrand.role !== 'Owner' && (
+          <p className="text-[12px] text-gray-400 mt-2">Only the brand Owner can delete this brand.</p>
+        )}
+      </div>
+
+      {showDeleteModal && (
+        <DeleteBrandModal
+          brandName={activeBrand.name}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={async () => {
+            await deleteBrand(activeBrand.id);
+            toast('Brand deleted', 'info');
+            setShowDeleteModal(false);
+            router.replace('/dashboard');
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── External agent access tab ────────────────────────────────────────────────
+
+type McpAccessToken = {
+  id: string;
+  name: string;
+  tokenPrefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+};
+
+type CreatedMcpAccessToken = McpAccessToken & { token: string };
+
+function AgentAccessTab() {
+  const { toast } = useToast();
+  const [tokens, setTokens] = useState<McpAccessToken[]>([]);
+  const [name, setName] = useState('');
+  const [newToken, setNewToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const endpoint = `${(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1').replace(/\/$/, '')}/mcp`;
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.get<McpAccessToken[]>('/integrations/mcp/tokens')
+      .then((items) => { if (!cancelled) setTokens(items); })
+      .catch((err: any) => { if (!cancelled) toast(err?.message ?? 'Failed to load access tokens', 'error'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const copy = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast(`${label} copied`, 'success');
+    } catch {
+      toast(`Could not copy ${label.toLowerCase()}`, 'error');
+    }
+  };
+
+  const createToken = async () => {
+    const trimmedName = name.trim();
+    if (!trimmedName || creating) return;
+    setCreating(true);
+    try {
+      const created = await api.post<CreatedMcpAccessToken>('/integrations/mcp/tokens', { name: trimmedName });
+      const { token, ...tokenRecord } = created;
+      setTokens((current) => [tokenRecord, ...current]);
+      setNewToken(token);
+      setName('');
+      toast('External agent token created', 'success');
+    } catch (err: any) {
+      toast(err?.message ?? 'Failed to create access token', 'error');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const revoke = async (token: McpAccessToken) => {
+    if (!window.confirm(`Revoke “${token.name}”? Any agent using it will lose access immediately.`)) return;
+    setRevokingId(token.id);
+    try {
+      await api.delete(`/integrations/mcp/tokens/${token.id}`);
+      setTokens((current) => current.filter((item) => item.id !== token.id));
+      toast('Access token revoked', 'success');
+    } catch (err: any) {
+      toast(err?.message ?? 'Failed to revoke access token', 'error');
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <p className="text-[18px] font-semibold text-gray-900">External agent access</p>
+        <p className="mt-1 text-[13px] text-gray-400">Connect Claude, ChatGPT, or another MCP-compatible agent to your Relay workspace.</p>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4">
+        <p className="text-[13px] font-semibold text-gray-800">MCP endpoint</p>
+        <p className="mt-1 text-[12px] text-gray-400">Use this Streamable HTTP URL when configuring your external agent.</p>
+        <div className="mt-3 flex items-center gap-2">
+          <code className="min-w-0 flex-1 truncate rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-600">{endpoint}</code>
+          <button type="button" onClick={() => void copy(endpoint, 'Endpoint')} className="btn-clay-secondary h-9 px-3 text-xs gap-1.5"><Copy size={13} /> Copy</button>
+        </div>
+        <p className="mt-3 text-[12px] text-gray-500">Configure authentication as <span className="font-semibold text-gray-700">Authorization: Bearer YOUR_TOKEN</span>.</p>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-gray-100 pt-5">
+        <div>
+          <p className="text-[15px] font-semibold text-gray-900">Access tokens</p>
+          <p className="mt-1 text-[13px] text-gray-400">Create one token per external agent or environment so access can be revoked independently.</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <TextInput value={name} onChange={setName} placeholder="e.g. Claude Desktop" />
+          <button type="button" onClick={() => void createToken()} disabled={!name.trim() || creating} className="btn-clay-primary h-10 shrink-0 px-4 text-xs gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+            {creating ? <Loader2 size={13} className="animate-spin" /> : <KeyRound size={13} />} Create token
+          </button>
+        </div>
+      </div>
+
+      {newToken && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[13px] font-semibold text-amber-900">Copy this token now</p>
+              <p className="mt-1 text-[12px] text-amber-700">For security, Relay will not show this secret again.</p>
+            </div>
+            <button type="button" onClick={() => setNewToken(null)} className="text-xs font-semibold text-amber-700 hover:text-amber-900">Done</button>
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded-lg border border-amber-200 bg-white px-3 py-2 text-[12px] text-gray-700">{newToken}</code>
+            <button type="button" onClick={() => void copy(newToken, 'Token')} className="btn-clay-secondary h-9 px-3 text-xs gap-1.5"><Copy size={13} /> Copy</button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {loading ? (
+          <div className="flex items-center gap-2 py-5 text-xs text-gray-400"><Loader2 size={13} className="animate-spin" /> Loading access tokens…</div>
+        ) : tokens.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-gray-200 px-3 py-5 text-center text-[13px] text-gray-400">No external agent tokens yet.</p>
+        ) : tokens.map((token) => (
+          <div key={token.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-600"><KeyRound size={14} /></div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-semibold text-gray-800">{token.name}</p>
+              <p className="mt-0.5 text-[11px] text-gray-400">{token.tokenPrefix}… · {token.lastUsedAt ? `Last used ${new Date(token.lastUsedAt).toLocaleDateString()}` : 'Never used'}</p>
+            </div>
+            <button type="button" onClick={() => void revoke(token)} disabled={revokingId === token.id} className="btn-clay-danger-outline h-8 px-2.5 text-[11px] gap-1 disabled:opacity-50">
+              {revokingId === token.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Revoke
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-[12px] text-red-700">
+        <Shield size={14} className="mt-0.5 shrink-0" />
+        <p>External agents can use the Relay MCP tools available to your account, including creating, scheduling, and publishing posts. Keep tokens private and revoke one immediately if it is exposed.</p>
       </div>
     </div>
   );
@@ -699,7 +1155,7 @@ function CommentsAiTab() {
           onChange={(e) => setBehaviour(e.target.value.slice(0, 1000))}
           placeholder="e.g. Super casual and funny, like texting a witty friend…"
           rows={4}
-          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors resize-none"
+          className="input-clay px-3 py-2.5 text-[13px] resize-none"
         />
         <p className="text-[11px] text-gray-400 text-right -mt-1">{behaviour.length}/1000</p>
       </Field>
@@ -714,7 +1170,7 @@ function CommentsAiTab() {
             value={config.guidelines}
             disabled
             rows={3}
-            className="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-[13px] text-gray-500 outline-none resize-none cursor-not-allowed"
+            className="input-clay px-3 py-2.5 text-[13px] resize-none"
           />
         </Field>
         <Field label="Brand niche">
@@ -722,7 +1178,7 @@ function CommentsAiTab() {
             value={config.niche}
             disabled
             rows={2}
-            className="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-[13px] text-gray-500 outline-none resize-none cursor-not-allowed"
+            className="input-clay px-3 py-2.5 text-[13px] resize-none"
           />
         </Field>
       </div>
@@ -833,7 +1289,7 @@ function BillingTab() {
           <p className="text-[22px] font-bold text-gray-900">$0 <span className="text-[14px] font-normal text-gray-400">/ month</span></p>
           <p className="text-[13px] text-gray-500 mt-1">1 brand · 5 accounts · 100 posts/mo</p>
         </div>
-        <button className="h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-1.5">
+        <button className="btn-clay-primary h-9 px-4 text-[13px] gap-1.5">
           <Zap size={14} /> Upgrade to Pro
         </button>
       </div>
@@ -869,7 +1325,7 @@ function BillingTab() {
             ))}
           </ul>
         </div>
-        <button className="shrink-0 h-9 px-4 text-[13px] font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors">
+        <button className="btn-clay-primary shrink-0 h-9 px-4 text-[13px]">
           Upgrade now
         </button>
       </div>
@@ -908,6 +1364,7 @@ function BillingTab() {
 const TABS: { key: Tab; label: string; icon: typeof User }[] = [
   { key: 'profile',       label: 'Profile',       icon: User        },
   { key: 'brand',         label: 'Brand',         icon: Building2   },
+  { key: 'agent-access',  label: 'Agent access',  icon: KeyRound    },
   { key: 'comments-ai',   label: 'Comments AI',   icon: Bot         },
   { key: 'notifications', label: 'Notifications', icon: Bell        },
   { key: 'billing',       label: 'Billing',       icon: CreditCard  },
@@ -941,6 +1398,7 @@ export function SettingsView() {
       <div className="flex-1 min-w-0">
         {tab === 'profile'       && <ProfileTab />}
         {tab === 'brand'         && <BrandTab />}
+        {tab === 'agent-access'  && <AgentAccessTab />}
         {tab === 'comments-ai'   && <CommentsAiTab />}
         {tab === 'notifications' && <NotificationsTab />}
         {tab === 'billing'       && <BillingTab />}

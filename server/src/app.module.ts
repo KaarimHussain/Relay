@@ -17,6 +17,9 @@ import { CompetitorsModule } from './competitors/competitors.module';
 import { TrendsModule } from './trends/trends.module';
 import { McpModule } from './mcp/mcp.module';
 import { AgentModule } from './agent/agent.module';
+import { LinkedInModule } from './linkedin/linkedin.module';
+import { ConversionsModule } from './conversions/conversions.module';
+import { CampaignPlansModule } from './campaign-plans/campaign-plans.module';
 
 @Module({
   imports: [
@@ -38,6 +41,9 @@ import { AgentModule } from './agent/agent.module';
     TrendsModule,
     McpModule,
     AgentModule,
+    LinkedInModule,
+    ConversionsModule,
+    CampaignPlansModule,
   ],
 })
 export class AppModule {}

@@ -10,8 +10,12 @@ import { AiModule } from '../ai/ai.module';
 import { CompetitorsModule } from '../competitors/competitors.module';
 import { TrendsModule } from '../trends/trends.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
+import { CampaignPlansModule } from '../campaign-plans/campaign-plans.module';
 import { McpController } from './mcp.controller';
+import { McpAccessTokenController } from './mcp-access-token.controller';
 import { McpService } from './mcp.service';
+import { McpAccessTokenService } from './mcp-access-token.service';
+import { McpAuthGuard } from './mcp-auth.guard';
 import { OwnershipService } from './ownership.service';
 
 @Module({
@@ -27,9 +31,10 @@ import { OwnershipService } from './ownership.service';
     CompetitorsModule,
     TrendsModule,
     AnalyticsModule,
+    CampaignPlansModule,
   ],
-  controllers: [McpController],
-  providers: [McpService, OwnershipService],
+  controllers: [McpController, McpAccessTokenController],
+  providers: [McpService, OwnershipService, McpAccessTokenService, McpAuthGuard],
   exports: [McpService],
 })
 export class McpModule {}

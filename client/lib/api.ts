@@ -58,10 +58,11 @@ async function request<T>(
 
   if (!res.ok) throw await parseError(res);
 
-  // 204 No Content
+  // A few valid API operations intentionally have no response body. Treat every
+  // successful empty response consistently, not only an explicit 204 status.
   if (res.status === 204) return undefined as T;
-
-  return res.json() as Promise<T>;
+  const body = await res.text();
+  return (body ? JSON.parse(body) : undefined) as T;
 }
 
 export const api = {

@@ -20,6 +20,8 @@ import { buildAiTools } from './tools/ai.tools';
 import { buildCompetitorTools } from './tools/competitors.tools';
 import { buildTrendTools } from './tools/trends.tools';
 import { buildAnalyticsTools } from './tools/analytics.tools';
+import { buildCampaignPlanTools } from './tools/campaign-plans.tools';
+import { CampaignPlansService } from '../campaign-plans/campaign-plans.service';
 
 @Injectable()
 export class McpService {
@@ -34,6 +36,7 @@ export class McpService {
     private trends: TrendsService,
     private analytics: AnalyticsService,
     private ownership: OwnershipService,
+    private campaigns: CampaignPlansService,
   ) {}
 
   buildToolsForUser(userId: string): AgentTool[] {
@@ -48,6 +51,7 @@ export class McpService {
       ...buildCompetitorTools(ctx, this.competitors, this.ownership),
       ...buildTrendTools(ctx, this.trends, this.ownership),
       ...buildAnalyticsTools(ctx, this.analytics, this.ownership),
+      ...buildCampaignPlanTools(ctx, this.campaigns),
     ];
   }
 

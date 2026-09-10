@@ -1,5 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { BrandsService } from './brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
@@ -29,12 +31,35 @@ export class BrandsController {
   @UseGuards(BrandMemberGuard)
   findOne(@Param('brandId') brandId: string) { return this.brands.findOne(brandId); }
 
+  @Get(':brandId/agent-memory')
+  @UseGuards(BrandMemberGuard)
+  getAgentMemory(@Param('brandId') brandId: string) {
+    return this.brands.getAgentMemory(brandId);
+  }
+
+  @Patch(':brandId/agent-memory')
+  @UseGuards(BrandMemberGuard)
+  @Roles(MemberRole.Admin, MemberRole.Owner)
+  updateAgentMemory(@Param('brandId') brandId: string, @Body() dto: Record<string, unknown>) {
+    return this.brands.updateAgentMemory(brandId, dto);
+  }
+
   @Patch(':brandId')
   @UseGuards(BrandMemberGuard)
   @Roles(MemberRole.Admin, MemberRole.Owner)
   update(@Param('brandId') brandId: string, @Body() dto: UpdateBrandDto) {
     return this.brands.update(brandId, dto);
   }
+
+  @Post(':brandId/logo')
+  @UseGuards(BrandMemberGuard)
+  @Roles(MemberRole.Admin, MemberRole.Owner)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }))
+  uploadLogo(
+    @Param('brandId') brandId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) { return this.brands.uploadLogo(brandId, file); }
 
   @Delete(':brandId')
   @UseGuards(BrandMemberGuard)

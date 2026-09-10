@@ -14,7 +14,11 @@ export type ToolCall = {
   args: string;
   result?: unknown;
   error?: string;
-  status: 'running' | 'done' | 'error';
+  approval?: {
+    id: string;
+    summary: string;
+  };
+  status: 'running' | 'awaiting_approval' | 'approved' | 'rejected' | 'done' | 'error';
 };
 
 export type Message = {
@@ -64,6 +68,10 @@ export const conversationsStore = {
   },
   remove(id: string) {
     this.save(this.load().filter((c) => c.id !== id));
+  },
+  clear() {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(KEY);
   },
 };
 

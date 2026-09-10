@@ -32,12 +32,16 @@ function BrandAvatar({ brand, size = 'md' }: { brand: Brand; size?: 'sm' | 'md' 
   return (
     <div
       className={cn(
-        'flex items-center justify-center rounded-md shrink-0 text-white font-bold leading-none',
+        'flex items-center justify-center rounded-md shrink-0 overflow-hidden text-white font-bold leading-none',
         size === 'sm' ? 'w-4.5 h-4.5 text-[9px]' : 'w-5.5 h-5.5 text-[10px]'
       )}
       style={{ backgroundColor: brand.colorHex }}
     >
-      {brand.name[0].toUpperCase()}
+      {brand.logoUrl ? (
+        <img src={brand.logoUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        brand.name[0].toUpperCase()
+      )}
     </div>
   );
 }

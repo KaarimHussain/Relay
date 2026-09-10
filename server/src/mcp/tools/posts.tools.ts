@@ -38,21 +38,25 @@ export function buildPostTools(
     {
       name: 'create_post',
       description:
-        'Create a new draft post for a brand. Provide caption/content and target social account ids. Does NOT publish or schedule — call schedule_post or publish_post_now next.',
+        'Create a new draft post for a brand. Provide a title, caption, and the target social account ids to post to. Does NOT publish or schedule — call schedule_post or publish_post_now after this.',
       inputShape: {
         brandId: z.string(),
-        caption: z.string().describe('The post text/caption'),
+        title: z.string().describe('Short internal title for the post (1–100 chars)'),
+        caption: z.string().describe('The post body/caption shared across all target accounts'),
         accountIds: z
           .array(z.string())
-          .describe('Social account ids this post will be published to'),
-        mediaUrls: z.array(z.string()).optional(),
+          .describe('Social account ids this post will be published to — must be non-empty'),
+        hashtags: z.string().optional().describe('Optional hashtags string to append, e.g. "#nextjs #opensource"'),
       },
-      handler: async ({ brandId, caption, accountIds, mediaUrls }) => {
+      handler: async ({ brandId, title, caption, accountIds, hashtags }) => {
         await ownership.assertBrandAccess(ctx.userId, brandId);
         return posts.create(brandId, ctx.userId, {
-          caption,
-          accountIds,
-          mediaUrls: mediaUrls ?? [],
+          title,
+          targets: (accountIds ?? []).map((accountId) => ({
+            accountId,
+            caption,
+            hashtags: hashtags ?? null,
+          })),
         } as any);
       },
     },
@@ -93,17 +97,27 @@ export function buildPostTools(
     {
       name: 'update_post',
       description:
-        'Update fields on an existing post (caption, media, target accounts). Only pass fields you want to change. Cannot be used on Published posts.',
+        'Update fields on an existing draft or scheduled post. Only pass fields you want to change. Cannot be used on Published posts.',
       inputShape: {
         brandId: z.string(),
         postId: z.string(),
-        caption: z.string().optional(),
-        accountIds: z.array(z.string()).optional(),
-        mediaUrls: z.array(z.string()).optional(),
+        title: z.string().optional(),
+        caption: z.string().optional().describe('New caption — replaces caption on all targets'),
+        accountIds: z.array(z.string()).optional().describe('Replace target account ids'),
+        hashtags: z.string().optional(),
       },
-      handler: async ({ brandId, postId, ...rest }) => {
+      handler: async ({ brandId, postId, title, caption, accountIds, hashtags }) => {
         await ownership.assertBrandAccess(ctx.userId, brandId);
-        return posts.update(brandId, postId, rest as any);
+        const updatePayload: any = {};
+        if (title) updatePayload.title = title;
+        if (accountIds?.length) {
+          updatePayload.targets = accountIds.map((accountId) => ({
+            accountId,
+            caption: caption ?? '',
+            hashtags: hashtags ?? null,
+          }));
+        }
+        return posts.update(brandId, postId, updatePayload);
       },
     },
   ];

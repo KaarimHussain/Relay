@@ -24,6 +24,8 @@ interface BrandState {
   setActiveBrand: (id: string) => void;
   addBrand: (brand: Brand) => void;
   updateBrand: (id: string, data: Partial<Pick<Brand, 'name' | 'colorHex' | 'voiceTone' | 'pillars'>>) => Promise<void>;
+  deleteBrand: (id: string) => Promise<void>;
+  setBrandLogo: (id: string, logoUrl: string) => void;
   reset: () => void;
 }
 
@@ -69,6 +71,21 @@ export const useBrandStore = create<BrandState>((set, get) => ({
   updateBrand: async (id, data) => {
     const updated = await api.patch<Brand>(`/brands/${id}`, data);
     set((s) => ({ brands: s.brands.map((b) => (b.id === id ? { ...b, ...updated } : b)) }));
+  },
+
+  setBrandLogo: (id, logoUrl) => {
+    set((s) => ({ brands: s.brands.map((b) => (b.id === id ? { ...b, logoUrl } : b)) }));
+  },
+
+  deleteBrand: async (id) => {
+    await api.delete(`/brands/${id}`);
+    set((s) => {
+      const remaining = s.brands.filter((b) => b.id !== id);
+      const nextId = remaining[0]?.id ?? null;
+      if (nextId) localStorage.setItem(STORAGE_KEY, nextId);
+      else localStorage.removeItem(STORAGE_KEY);
+      return { brands: remaining, activeBrandId: nextId };
+    });
   },
 
   reset: () => {

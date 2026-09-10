@@ -4,7 +4,14 @@
       "Bash(npm view *)",
       "PowerShell(npm run *)",
       "PowerShell(Set-Location \"C:\\\\Users\\\\AL SYED COMPUTER\\\\Desktop\\\\Relay\\\\client\"; npx tsc --noEmit -p tsconfig.json; Write-Output \"EXITCODE=$LASTEXITCODE\")",
-      "PowerShell(npm install *)"
+      "PowerShell(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(xargs grep -l -i \"account\\\\|linkedin_pending\")",
+      "Bash(Get-ChildItem -Recurse \"D:\\\\Company Project\\\\Relay\\\\client\" -Filter \"*.tsx\")",
+      "Bash(Select-String -Pattern \"linkedin_pending|Company Page|\\\\+.*Page\")",
+      "Bash(Select-Object -First 20)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Recurse \"D:\\\\Company Project\\\\Relay\\\\server\\\\src\\\\oauth\" | ForEach-Object { $_.FullName })"
     ]
   }
 }

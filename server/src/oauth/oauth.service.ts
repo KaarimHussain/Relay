@@ -107,7 +107,7 @@ export class OAuthService {
       response_type: 'code',
       client_id:     this.config.getOrThrow('LINKEDIN_CLIENT_ID'),
       redirect_uri:  this.callbackUrl('linkedin'),
-      scope:         'openid profile w_member_social',
+      scope:         'openid profile w_member_social rw_conversions',
       state,
     });
     return `https://www.linkedin.com/oauth/v2/authorization?${params}`;
@@ -369,29 +369,28 @@ export class OAuthService {
     const profile = await profileRes.json() as any;
     const personName: string = profile.name ?? profile.email ?? profile.sub;
 
-    // Fetch organization pages this user can administer.
-    // Requires Community Management API product on the LinkedIn app.
+    // Try to auto-discover organization pages this user administers.
+    // Uses the REST API (not v2) to match the LinkedIn-Version header.
     const orgs: Array<{ id: string; name: string }> = [];
     try {
-      const aclUrl =
-        'https://api.linkedin.com/v2/organizationAcls' +
-        '?q=roleAssignee' +
-        '&count=10';
-      const aclRes = await fetch(aclUrl, { headers: liHeaders });
+      const aclRes = await fetch(
+        'https://api.linkedin.com/rest/organizationAcls?q=roleAssignee&count=10',
+        { headers: liHeaders },
+      );
 
       if (aclRes.ok) {
         const aclData = await aclRes.json() as any;
         const elements: any[] = aclData.elements ?? [];
 
         for (const el of elements) {
+          // REST response: organizationAcl has "organization" as a URN string
           const urn: string = el.organization ?? '';
           const orgId = urn.split(':').pop();
           if (!orgId) continue;
 
-          // Try to fetch the org display name
           try {
             const orgRes = await fetch(
-              `https://api.linkedin.com/v2/organizations/${orgId}?fields=localizedName`,
+              `https://api.linkedin.com/rest/organizations/${orgId}`,
               { headers: liHeaders },
             );
             const orgData = orgRes.ok ? await orgRes.json() as any : {};
@@ -402,13 +401,13 @@ export class OAuthService {
         }
       } else {
         const errText = await aclRes.text().catch(() => '');
-        console.warn('[LinkedIn ACL] non-ok status:', aclRes.status, errText);
+        console.warn('[LinkedIn ACL] status:', aclRes.status, errText);
       }
     } catch {
-      // Network or parse error — skip company pages, personal only
+      // Network or parse error — fall through to personal-only
     }
 
-    // No company pages — save personal profile immediately and return to normal flow
+    // No company pages found → save personal immediately, no picker needed
     if (orgs.length === 0) {
       await this.accounts.connect(brandId, {
         platform:       'LinkedIn',
@@ -420,7 +419,7 @@ export class OAuthService {
       return null;
     }
 
-    // Company pages found — store for picker and return tempId
+    // Company pages found → store for picker
     const tempId = crypto.randomBytes(20).toString('hex');
     this.linkedinPending.set(tempId, {
       userId,

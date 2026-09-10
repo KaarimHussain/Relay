@@ -7,11 +7,11 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { McpService } from './mcp.service';
+import { McpAuthGuard } from './mcp-auth.guard';
 
 @Controller('mcp')
-@UseGuards(JwtAuthGuard)
+@UseGuards(McpAuthGuard)
 export class McpController {
   constructor(private mcp: McpService) {}
 

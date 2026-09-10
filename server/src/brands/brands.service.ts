@@ -1,4 +1,5 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { v2 as cloudinary } from 'cloudinary';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
@@ -43,6 +44,55 @@ export class BrandsService {
 
   async update(brandId: string, dto: UpdateBrandDto) {
     return this.prisma.brand.update({ where: { id: brandId }, data: dto });
+  }
+
+  async getAgentMemory(brandId: string) {
+    const memory = await this.prisma.brandAgentMemory.findUnique({ where: { brandId } });
+    // Nest serializes a top-level null as an empty 200 response. Return a JSON
+    // default instead so clients can reliably initialize a brand with no memory yet.
+    return memory ?? {
+      brandId,
+      preferredPlatforms: [],
+      preferredPostingTimes: null,
+      defaultHashtags: null,
+      defaultCta: null,
+      forbiddenPhrases: null,
+      approvalMode: 'always',
+      notes: null,
+    };
+  }
+
+  async updateAgentMemory(brandId: string, dto: Record<string, unknown>) {
+    return this.prisma.brandAgentMemory.upsert({
+      where: { brandId },
+      create: { brandId, ...(dto as any) },
+      update: dto as any,
+    });
+  }
+
+  async uploadLogo(brandId: string, file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No file provided');
+    if (!file.mimetype?.startsWith('image/')) throw new BadRequestException('File must be an image');
+
+    const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'image',
+          folder: 'relay/logos',
+          unique_filename: true,
+          transformation: [{ width: 256, height: 256, crop: 'fill' }],
+        },
+        (err, res) => {
+          if (err || !res) reject(err ?? new Error('Cloudinary upload failed'));
+          else resolve(res);
+        },
+      ).end(file.buffer);
+    }).catch(() => { throw new BadRequestException('Failed to upload logo — please try again'); });
+
+    return this.prisma.brand.update({
+      where: { id: brandId },
+      data: { logoUrl: result.secure_url },
+    });
   }
 
   async delete(brandId: string) {

@@ -4,19 +4,24 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { TopBar } from '@/components/dashboard/TopBar';
-import { AgentSwitch } from '@/components/agent/AgentSwitch';
 import { useAuthStore } from '@/store/auth';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const status = useAuthStore((s) => s.status);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [entered, setEntered] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.replace('/login');
     }
   }, [status, router]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   // Show minimal loading shell while auth hydrates — avoids flash of unauthenticated content
   if (status === 'idle' || status === 'loading') {
@@ -36,7 +41,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (status === 'unauthenticated') return null;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F8F9FA]">
+    <div
+      className={`flex h-screen overflow-hidden bg-[#F8F9FA] transition-[opacity,transform] duration-300 ease-out ${entered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+    >
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
@@ -56,7 +63,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
 
-      <AgentSwitch />
     </div>
   );
 }

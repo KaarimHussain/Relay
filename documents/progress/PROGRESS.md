@@ -126,7 +126,7 @@ This is fine to keep (it's a warn, not a log), but review before production.
 ```
 Relay/
 ├── package.json                          # Root: concurrently dev command
-├── OAUTH_SETUP.md                        # Developer portal setup guide (LinkedIn, Meta, X, TikTok)
+├── documents/context/integrations/OAUTH_SETUP.md # Developer portal setup guide (LinkedIn, Meta, X, TikTok)
 ├── client/
 │   ├── app/(dashboard)/
 │   │   └── accounts/page.tsx             # Accounts page — list/row design, OAuth banners, LinkedIn picker

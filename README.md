@@ -64,8 +64,7 @@ Relay/
 │   ├── src/         # Modules (auth, oauth, comments, ai, posts, etc.)
 │   ├── prisma/      # schema.prisma + migrations
 │   └── uploads/     # Local uploads (dev)
-├── OAUTH_SETUP.md   # Full OAuth developer-portal instructions
-├── PROJECT_OVERVIEW.md
+├── documents/       # Product, technical, integration, brand, and progress docs
 └── README.md        # (this file)
 ```
 
@@ -167,7 +166,7 @@ FRONTEND_URL=http://localhost:3000
 REDIS_HOST=localhost
 REDIS_PORT=6379
 
-# --- Social OAuth (see OAUTH_SETUP.md) ---
+# --- Social OAuth (see documents/context/integrations/OAUTH_SETUP.md) ---
 LINKEDIN_CLIENT_ID=
 LINKEDIN_CLIENT_SECRET=
 
@@ -249,7 +248,7 @@ All Prisma commands run from the `server/` folder.
 
 ## OAuth / Social Account Setup
 
-Each social platform needs an app configured in its developer portal (client ID/secret, redirect URI, scopes). Full step-by-step instructions for LinkedIn, Facebook, Instagram, X, and TikTok are in [`OAUTH_SETUP.md`](./OAUTH_SETUP.md).
+Each social platform needs an app configured in its developer portal (client ID/secret, redirect URI, scopes). Full step-by-step instructions for LinkedIn, Facebook, Instagram, X, and TikTok are in [the OAuth setup guide](./documents/context/integrations/OAUTH_SETUP.md).
 
 Callback URL pattern:
 - Dev: `http://localhost:3001/api/v1/oauth/callback/{platform}`
@@ -294,7 +293,7 @@ Callback URL pattern:
 
 ## Further Reading
 
-- [`PROJECT_OVERVIEW.md`](./PROJECT_OVERVIEW.md) — What's built, what's pending, plain-English tour.
-- [`OAUTH_SETUP.md`](./OAUTH_SETUP.md) — Detailed OAuth portal setup for every platform.
-- [`RELAY_BRAND_GUIDELINES.md`](./RELAY_BRAND_GUIDELINES.md) — Brand tone & style.
-- [`PROGRESS.md`](./PROGRESS.md) / [`PROJECT_STATUS.md`](./PROJECT_STATUS.md) — Historical progress notes.
+- [Project overview](./documents/context/product/PROJECT_OVERVIEW.md) — What's built, what's pending, plain-English tour.
+- [OAuth setup](./documents/context/integrations/OAUTH_SETUP.md) — Detailed OAuth portal setup for every platform.
+- [Brand guidelines](./documents/context/brand/RELAY_BRAND_GUIDELINES.md) — Brand tone & style.
+- [Progress notes](./documents/progress/PROGRESS.md) and [project status](./documents/progress/PROJECT_STATUS.md) — Historical progress notes.

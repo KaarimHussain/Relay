@@ -7,6 +7,13 @@ import { SchedulePostDto } from './dto/schedule-post.dto';
 import { PostStatus } from '@prisma/client';
 import { publishToPlatform } from './workers/platform-publisher';
 
+function isCredentialFailure(error: unknown): boolean {
+  const message = String((error as any)?.message ?? error ?? '').toLowerCase();
+  return message.includes(' 401')
+    || message.includes('access token') || message.includes('token expired')
+    || message.includes('invalid token') || message.includes('oauth');
+}
+
 @Injectable()
 export class PostsService {
   constructor(
@@ -91,6 +98,23 @@ export class PostsService {
     const post = await this.findOne(brandId, postId);
     if (!post.targets.length) throw new BadRequestException('Post has no platform targets');
     const scheduledAt = new Date(dto.scheduledAt);
+    if (Number.isNaN(scheduledAt.getTime()) || scheduledAt <= new Date()) {
+      throw new BadRequestException('Choose a future date and time to schedule this post.');
+    }
+
+    // Surface accounts that are already known to be unusable before the post
+    // reaches the scheduler, where the recovery context would be much weaker.
+    const targetAccounts = await this.prisma.socialAccount.findMany({
+      where: { id: { in: post.targets.map((target) => target.accountId) }, brandId },
+      select: { platform: true, platformHandle: true, status: true, tokenExpiresAt: true },
+    });
+    const unavailable = targetAccounts.filter((account) =>
+      account.status !== 'Active' || (account.tokenExpiresAt && account.tokenExpiresAt <= new Date()),
+    );
+    if (unavailable.length) {
+      const labels = unavailable.map((account) => `${account.platform} (${account.platformHandle})`).join(', ');
+      throw new BadRequestException(`Reconnect ${labels} before scheduling this post.`);
+    }
 
     await this.prisma.post.update({ where: { id: postId }, data: { status: PostStatus.Scheduled, scheduledAt } });
     await this.prisma.postPlatformTarget.updateMany({
@@ -102,16 +126,21 @@ export class PostsService {
   }
 
   // Runs publish logic inline — no queue, no Redis dependency.
-  async publishNow(brandId: string, postId: string) {
+  async publishNow(brandId: string, postId: string, retryFailedOnly = false) {
     const post = await this.findOne(brandId, postId);
     if (!post.targets.length) throw new BadRequestException('Post has no platform targets');
 
+    // A retry must only re-run targets that have not already succeeded. This
+    // prevents duplicate posts when a multi-platform publish partially fails.
+    const pendingTargets = post.targets.filter((target) => target.status !== PostStatus.Published && (!retryFailedOnly || target.status === PostStatus.Failed));
+    if (!pendingTargets.length) return post;
+
     await this.prisma.post.update({ where: { id: postId }, data: { status: PostStatus.Publishing } });
 
-    for (const target of post.targets) {
+    for (const target of pendingTargets) {
       await this.prisma.postPlatformTarget.update({
         where: { id: target.id },
-        data: { status: PostStatus.Publishing },
+        data: { status: PostStatus.Publishing, errorMessage: null },
       });
 
       try {
@@ -129,6 +158,9 @@ export class PostsService {
           data: { status: PostStatus.Published, publishedAt: new Date(), externalPostId },
         });
       } catch (err: any) {
+        if (isCredentialFailure(err)) {
+          await this.accounts.markExpired(target.accountId).catch(() => undefined);
+        }
         await this.prisma.postPlatformTarget.update({
           where: { id: target.id },
           data: { status: PostStatus.Failed, errorMessage: err?.message ?? 'Unknown error' },
@@ -146,6 +178,14 @@ export class PostsService {
       data: { status: finalStatus },
       include: { targets: { include: { account: { select: { platform: true, platformHandle: true } } } }, media: true },
     });
+  }
+
+  async retryFailed(brandId: string, postId: string) {
+    const post = await this.findOne(brandId, postId);
+    if (!post.targets.some((target) => target.status === PostStatus.Failed)) {
+      throw new BadRequestException('This post has no failed publishing targets to retry.');
+    }
+    return this.publishNow(brandId, postId, true);
   }
 
   async cancel(brandId: string, postId: string) {

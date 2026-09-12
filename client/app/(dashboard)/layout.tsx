@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { TopBar } from '@/components/dashboard/TopBar';
 import { useAuthStore } from '@/store/auth';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const status = useAuthStore((s) => s.status);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [entered, setEntered] = useState(false);
@@ -57,7 +58,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar onMenuClick={() => setSidebarOpen((v) => !v)} />
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl mx-auto w-full p-4 flex flex-col gap-4">
+          <div className={pathname === '/queue' ? 'w-full min-h-full' : 'max-w-7xl mx-auto w-full p-4 flex flex-col gap-4'}>
             {children}
           </div>
         </main>

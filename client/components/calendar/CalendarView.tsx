@@ -113,9 +113,9 @@ function PostDetailModal({ post, onClose }: { post: CalendarPost; onClose: () =>
         </div>
 
         <div className="flex items-center gap-2 px-5 pb-5">
-          <Link href="/queue" onClick={onClose}
+          <Link href={`/posts/${post.id}/edit`} onClick={onClose}
             className="flex-1 btn-clay-secondary h-9 text-[13px] gap-1.5 inline-flex items-center justify-center">
-            <Edit2 size={13} /> View in queue
+            <Edit2 size={13} /> Edit post
           </Link>
           <Link href="/posts/new" onClick={onClose}
             className="flex-1 btn-clay-primary h-9 text-[13px] inline-flex items-center justify-center gap-1.5">
@@ -179,7 +179,7 @@ function DayOverflowPanel({
         </div>
 
         <div className="px-4 pb-4 pt-1">
-          <Link href="/posts/new" onClick={onClose}
+          <Link href={`/posts/new?scheduledAt=${encodeURIComponent(`${dateKey(date)}T10:00`)}`} onClick={onClose}
             className="w-full btn-clay-primary h-9 text-[13px] gap-1.5 inline-flex items-center justify-center">
             <Plus size={13} strokeWidth={2.5} /> Add post on this day
           </Link>
@@ -255,6 +255,20 @@ export function CalendarView() {
     return filtered;
   }, [postsByDay, platformFilter]);
 
+  const monthSummary = useMemo(() => {
+    const inMonth = posts.filter((post) => {
+      const source = post.scheduledAt ?? (post.status === 'Published' ? post.updatedAt : null);
+      if (!source) return false;
+      const date = new Date(source);
+      return date.getFullYear() === year && date.getMonth() === month;
+    });
+    return {
+      scheduled: inMonth.filter((post) => post.status === 'Scheduled').length,
+      published: inMonth.filter((post) => post.status === 'Published').length,
+      drafts: posts.filter((post) => post.status === 'Draft').length,
+    };
+  }, [posts, year, month]);
+
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
   const goToday   = () => { setYear(today.getFullYear()); setMonth(today.getMonth()); };
@@ -279,10 +293,10 @@ export function CalendarView() {
 
   return (
     <>
-      <div className="flex flex-col gap-4 h-full">
+      <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-5 pb-8">
 
         {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex flex-col gap-3 rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50/80 via-white to-amber-50/60 px-4 py-4 shadow-2xs sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <button onClick={goToday} className="btn-clay-secondary h-8 px-3 text-xs font-medium">Today</button>
             <div className="flex items-center">
@@ -312,6 +326,14 @@ export function CalendarView() {
               <Plus size={13} strokeWidth={2.5} /> New post
             </Link>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {[
+            { label: 'Scheduled this month', value: monthSummary.scheduled, tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+            { label: 'Published this month', value: monthSummary.published, tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+            { label: 'Drafts to plan', value: monthSummary.drafts, tone: 'bg-gray-50 text-gray-700 border-gray-200' },
+          ].map((item) => <div key={item.label} className={cn('flex items-center justify-between rounded-xl border px-3 py-2.5', item.tone)}><span className="text-[11px] font-semibold">{item.label}</span><span className="text-lg font-bold tabular-nums">{item.value}</span></div>)}
         </div>
 
         {/* Error */}
@@ -352,7 +374,7 @@ export function CalendarView() {
 
               return (
                 <div key={key}
-                  onClick={() => date && router.push('/posts/new')}
+                  onClick={() => date && router.push(`/posts/new?scheduledAt=${encodeURIComponent(`${dateKey(date)}T10:00`)}`)}
                   className={cn(
                     'border-b border-r border-gray-100 flex flex-col',
                     'min-h-[80px] sm:min-h-[110px]',

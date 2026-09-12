@@ -120,7 +120,12 @@ export function CreatePostView() {
   useEffect(() => {
     const prefillCaption  = searchParams.get('caption');
     const prefillPlatform = searchParams.get('platform');
+    const prefillSchedule = searchParams.get('scheduledAt');
     if (prefillCaption) setCaption(decodeURIComponent(prefillCaption));
+    if (prefillSchedule && !Number.isNaN(new Date(prefillSchedule).getTime())) {
+      setMode('schedule');
+      setScheduleDate(prefillSchedule.slice(0, 16));
+    }
     if (prefillPlatform && accounts.length > 0) {
       const match = accounts.find(
         (a) => a.platform.toLowerCase() === prefillPlatform.toLowerCase()
@@ -133,15 +138,16 @@ export function CreatePostView() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts.length]);
 
-  // Pre-load a media item passed via ?mediaId= (from Media Library "Use in post")
+  // Pre-load media passed from Media Library's "Use in post" action.
   useEffect(() => {
-    const mediaId = searchParams.get('mediaId');
-    if (!mediaId || !activeBrand) return;
-    api.get<{ id: string; filename: string; mimeType: string; sizeBytes: number; url: string }>(
-      `/brands/${activeBrand.id}/media/${mediaId}`
-    ).then((m) => {
-      setMediaItems([{ id: m.id, url: m.url, mimeType: m.mimeType, name: m.filename, size: m.sizeBytes }]);
-    }).catch(() => {});
+    const rawIds = searchParams.get('mediaIds') ?? searchParams.get('mediaId');
+    if (!rawIds || !activeBrand) return;
+    const ids = [...new Set(rawIds.split(',').filter(Boolean))];
+    Promise.all(ids.map((id) => api.get<{ id: string; filename: string; mimeType: string; sizeBytes: number; url: string }>(
+      `/brands/${activeBrand.id}/media/${id}`
+    )))
+      .then((media) => setMediaItems(media.map((item) => ({ id: item.id, url: item.url, mimeType: item.mimeType, name: item.filename, size: item.sizeBytes }))))
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBrand?.id]);
 
@@ -183,6 +189,15 @@ export function CreatePostView() {
     }
     return [...new Set(warnings)];
   }, [mediaItems, selectedAccounts, hasImages, mediaImages.length]);
+
+  const readiness = [
+    { label: 'Title', ready: Boolean(title.trim()) },
+    { label: 'Caption', ready: Boolean(caption.trim()) },
+    { label: 'Account', ready: selectedAccountIds.size > 0 },
+    { label: mode === 'schedule' ? 'Time' : 'Timing', ready: mode !== 'schedule' || Boolean(scheduleDate) },
+    { label: 'Media', ready: mediaWarnings.length === 0 },
+  ];
+  const readyCount = readiness.filter((item) => item.ready).length;
 
   // ─── Library picker handlers ──────────────────────────────────────────────────
 
@@ -418,7 +433,7 @@ export function CreatePostView() {
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 pb-8">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200/80 pb-3 flex-wrap gap-2">
         <div className="flex items-center gap-3">
@@ -450,20 +465,27 @@ export function CreatePostView() {
         </div>
       )}
 
+      <section className="rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50/80 via-white to-amber-50/70 px-4 py-3 shadow-2xs">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="text-xs font-bold text-gray-900">Post readiness <span className="ml-1 font-medium text-gray-400">{readyCount}/{readiness.length} checks complete</span></p><p className="mt-0.5 text-[11px] text-gray-500">Complete the essentials, then choose when Relay should publish.</p></div>
+          <div className="flex flex-wrap gap-1.5">{readiness.map((item) => <span key={item.label} className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold', item.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700')}><Check size={10} strokeWidth={3} className={item.ready ? '' : 'opacity-35'} />{item.label}</span>)}</div>
+        </div>
+      </section>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* ── Left: Composer ─────────────────────────────────────────────────── */}
         <div className="lg:col-span-7 flex flex-col gap-4">
 
           {/* Title */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-2xs">
-            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">Post Title</label>
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-2xs">
+            <div className="mb-2 flex items-center justify-between"><label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Post Title</label><span className="text-[10px] font-semibold text-gray-400">{title.length}/200</span></div>
             <input
               type="text" value={title} onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Product launch announcement"
               maxLength={200}
-              className="w-full h-[38px] px-3 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors"
+              className="w-full h-13 px-4 bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-xl text-[15px] font-medium text-gray-800 placeholder:text-gray-400 outline-none shadow-inner shadow-gray-100/40 focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all"
             />
-            <p className="text-[11px] text-gray-400 mt-1.5">Used internally to identify this post in your queue.</p>
+            <p className="mt-2 text-[11px] text-gray-400">A clear internal name makes this post easier to find in Queue and Calendar.</p>
           </div>
 
           {/* Platform selector */}
@@ -506,7 +528,7 @@ export function CreatePostView() {
           </div>
 
           {/* Caption */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 shadow-2xs">
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-col gap-3 shadow-2xs">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Post Caption</label>
               <div className="flex items-center gap-2">
@@ -532,8 +554,9 @@ export function CreatePostView() {
               </div>
             </div>
             <textarea value={caption} onChange={(e) => setCaption(e.target.value)}
-              placeholder="Write your post content here…" rows={6}
-              className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-3 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors leading-relaxed resize-none" />
+              placeholder="Write your post content here…" rows={8}
+              className="w-full min-h-[230px] bg-gradient-to-br from-gray-50/90 to-white border border-gray-200 rounded-xl p-4 text-[14px] text-gray-900 placeholder:text-gray-400 outline-none shadow-inner shadow-gray-100/40 focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all leading-7 resize-y" />
+            <div className="-mt-1 flex items-center justify-between text-[11px]"><span className="text-gray-400">Write naturally — Relay will keep platform limits visible above.</span><span className="font-semibold text-gray-400">{caption.length} characters</span></div>
             {templatePickerOpen && (
               <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-2">
                 <div className="mb-2 flex items-center justify-between px-1">
@@ -714,16 +737,16 @@ export function CreatePostView() {
           {/* Schedule */}
           <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-2.5 shadow-2xs">
             <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Post Timing</label>
-            <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {([
                 { id: 'now',      label: 'Post immediately',   icon: Send     },
                 { id: 'schedule', label: 'Schedule for later',  icon: Clock    },
                 { id: 'draft',    label: 'Save as draft',       icon: FileText },
               ] as const).map((opt) => (
                 <button key={opt.id} type="button" onClick={() => setMode(opt.id)}
-                  className={cn('flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all text-left',
-                    mode === opt.id ? 'bg-orange-50 border-orange-300 text-orange-700 font-semibold' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-white')}>
-                  <opt.icon size={13} /><span>{opt.label}</span>
+                  className={cn('flex min-h-12 flex-col items-start justify-center gap-1 rounded-xl border px-3 py-2 text-xs font-medium transition-all text-left',
+                    mode === opt.id ? 'bg-orange-50 border-orange-300 text-orange-700 font-semibold shadow-sm' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-white hover:border-gray-300')}>
+                  <opt.icon size={14} /><span>{opt.label}</span>
                 </button>
               ))}
             </div>

@@ -36,7 +36,7 @@ export function PasswordInput({
         value={value}
         onChange={onChange}
         className={cn(
-          'w-full h-[38px] px-3 pr-10 bg-gray-50 border border-gray-200 rounded-lg',
+          'w-full h-10 px-3 pr-10 bg-gray-50 border border-gray-200 rounded-xl',
           'text-[13px] text-gray-700 placeholder:text-gray-400 outline-none',
           'focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors',
           className

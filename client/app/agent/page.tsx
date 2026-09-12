@@ -501,8 +501,14 @@ export default function AgentPage() {
       onDrop={onDrop}
     >
       <div className="absolute top-3 left-0 right-0 z-30 flex items-center justify-between px-4">
-        <div className="text-xs font-medium text-gray-400 truncate max-w-[40%]">
-          {active?.title ?? 'New chat'}
+        <div className="flex min-w-0 items-center gap-2 max-w-[55%]">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+          <div className="text-xs font-medium text-gray-500 truncate">
+            {active?.title ?? 'New chat'}
+          </div>
+          <span className="hidden sm:inline shrink-0 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[9px] font-semibold text-gray-400">
+            Approval-safe
+          </span>
         </div>
         <div className="flex items-center gap-1.5">
           <AgentSwitch />
@@ -514,7 +520,6 @@ export default function AgentPage() {
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto pt-12">
         <div className="max-w-2xl mx-auto w-full px-5">
-          <ProactiveBriefing />
           {isEmpty ? (
             <div className="flex flex-col items-center justify-center min-h-[65vh] text-center">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
@@ -683,82 +688,6 @@ function CopyIconButton({
         </svg>
       )}
     </button>
-  );
-}
-
-type BriefingItem = {
-  kind: string;
-  title: string;
-  detail: string;
-  href: string;
-  priority: 'info' | 'warning' | 'urgent';
-};
-
-type Briefing = {
-  id: string;
-  period: 'daily' | 'weekly';
-  items: BriefingItem[];
-  createdAt: string;
-};
-
-function ProactiveBriefing() {
-  const [briefing, setBriefing] = useState<Briefing | null>(null);
-  const [expanded, setExpanded] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const refresh = async () => {
-    setRefreshing(true);
-    try {
-      const next = await api.post<Briefing>('/agent/briefings/refresh');
-      setBriefing(next);
-      setExpanded(true);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    let active = true;
-    void api.get<Briefing | undefined>('/agent/briefings/latest')
-      .then(async (latest) => {
-        if (!active) return;
-        if (latest) {
-          setBriefing(latest);
-          return;
-        }
-        const initial = await api.post<Briefing>('/agent/briefings/refresh');
-        if (active) setBriefing(initial);
-      })
-      .catch(() => undefined);
-    return () => { active = false; };
-  }, []);
-
-  if (!briefing) return null;
-  const urgentCount = briefing.items.filter((item) => item.priority === 'urgent').length;
-
-  return (
-    <section className="mb-5 rounded-xl border border-primary/15 bg-primary/[0.03] px-3.5 py-3 text-xs">
-      <div className="flex items-center gap-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 text-sm">✦</span>
-        <button type="button" onClick={() => setExpanded((value) => !value)} className="min-w-0 flex-1 text-left">
-          <p className="font-semibold text-gray-900">Relay briefing</p>
-          <p className="mt-0.5 truncate text-gray-500">{urgentCount ? `${urgentCount} urgent item${urgentCount === 1 ? '' : 's'} need attention` : 'Your latest workspace check is ready.'}</p>
-        </button>
-        <button type="button" onClick={() => void refresh()} disabled={refreshing} className="rounded-md px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">
-          {refreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
-      </div>
-      {expanded && (
-        <div className="mt-3 space-y-1.5 border-t border-primary/10 pt-2.5">
-          {briefing.items.map((item, index) => (
-            <a key={`${item.kind}-${index}`} href={item.href} className="block rounded-lg bg-white px-2.5 py-2 hover:bg-gray-50">
-              <p className={`font-semibold ${item.priority === 'urgent' ? 'text-red-700' : item.priority === 'warning' ? 'text-amber-700' : 'text-gray-800'}`}>{item.title}</p>
-              <p className="mt-0.5 leading-relaxed text-gray-500">{item.detail}</p>
-            </a>
-          ))}
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -1177,6 +1106,14 @@ function describeAction(toolCall: ToolCall): ActionReceipt {
     return {
       title: result?.status === 'Published' ? 'Post published' : 'Publishing completed',
       detail: `${postTitle ? `“${postTitle}” ` : 'Your post '}${platforms ? `was sent to ${platforms}.` : 'was sent to its selected accounts.'}`,
+      href: '/queue',
+      linkLabel: 'View post status',
+    };
+  }
+  if (toolCall.name === 'retry_failed_post') {
+    return {
+      title: result?.status === 'Published' ? 'Failed destinations recovered' : 'Retry completed',
+      detail: 'Relay retried only the destinations that failed. Anything already published was left untouched.',
       href: '/queue',
       linkLabel: 'View post status',
     };

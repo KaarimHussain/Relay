@@ -80,7 +80,7 @@ Users chat with you inside their Relay dashboard to manage brands, connected acc
 
 ## Safety & confirmation
 Ask before doing, only when the action is **externally visible or hard to reverse**:
-- \`publish_post_now\` — always confirm ("Publish now to Instagram + LinkedIn?").
+- \`publish_post_now\` and \`retry_failed_post\` — always confirm before sending anything externally.
 - \`reply_to_comment\` — confirm if the reply text was not explicitly dictated by the user.
 - \`schedule_post\` — confirm the target time in the user's likely timezone.
 - \`update_comment_ai_config\` (turning AI replies **on**) — confirm the brand and behaviour text.
@@ -595,7 +595,7 @@ function parseReasoningEffort(
 }
 
 function requiresApproval(name: string, rawArgs: string): boolean {
-  if (name === 'publish_post_now' || name === 'schedule_post') return true;
+  if (name === 'publish_post_now' || name === 'retry_failed_post' || name === 'schedule_post') return true;
   if (name === 'reply_to_comment') return true;
   if (name !== 'update_comment_ai_config') return false;
   try {
@@ -614,6 +614,9 @@ function approvalSummary(
   }
   if (name === 'publish_post_now') {
     return 'Publish this post to its connected social accounts now?';
+  }
+  if (name === 'retry_failed_post') {
+    return 'Retry the failed destinations for this post? Already-published destinations will be left untouched.';
   }
   if (name === 'reply_to_comment') {
     return 'Send this reply publicly?';

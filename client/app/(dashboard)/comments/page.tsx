@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   MessageSquare, RefreshCw, Send, Loader2, Bot, Trash2,
   Plus, ToggleLeft, ToggleRight, ChevronDown, AlertCircle,
@@ -107,6 +107,7 @@ function CommentsTab({ brandId }: { brandId: string }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [repliesById, setRepliesById] = useState<Record<string, Reply[]>>({});
   const [loadingReplies, setLoadingReplies] = useState<Set<string>>(new Set());
+  const [triage, setTriage] = useState<'all' | 'unanswered' | 'replied' | 'automated'>('all');
 
   const toggleReplies = useCallback(async (commentId: string) => {
     setExpanded((prev) => {
@@ -186,6 +187,25 @@ function CommentsTab({ brandId }: { brandId: string }) {
   };
 
   const hasFilters = !!(platform || postId);
+  const commentStats = useMemo(() => {
+    const unanswered = comments.filter((comment) => !comment.autoReplied && (comment._count?.replies ?? 0) === 0).length;
+    const replied = comments.filter((comment) => (comment._count?.replies ?? 0) > 0).length;
+    const automated = comments.filter((comment) => comment.autoReplied).length;
+    return { total: comments.length, unanswered, replied, automated };
+  }, [comments]);
+  const visibleComments = useMemo(() => comments.filter((comment) => {
+    const replyCount = comment._count?.replies ?? 0;
+    if (triage === 'unanswered') return !comment.autoReplied && replyCount === 0;
+    if (triage === 'replied') return replyCount > 0;
+    if (triage === 'automated') return comment.autoReplied;
+    return true;
+  }), [comments, triage]);
+  const triageOptions = [
+    { key: 'all' as const, label: 'All', count: commentStats.total },
+    { key: 'unanswered' as const, label: 'Needs reply', count: commentStats.unanswered },
+    { key: 'replied' as const, label: 'Replied', count: commentStats.replied },
+    { key: 'automated' as const, label: 'Automated', count: commentStats.automated },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
@@ -208,6 +228,27 @@ function CommentsTab({ brandId }: { brandId: string }) {
             </button>
           );
         })}
+      </div>
+
+      {/* Inbox health and client-side triage */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {triageOptions.map((option) => (
+          <button
+            key={option.key}
+            onClick={() => setTriage(option.key)}
+            className={cn(
+              'rounded-xl border px-3 py-2.5 text-left transition-all',
+              triage === option.key
+                ? 'border-orange-300 bg-orange-50/70 shadow-sm'
+                : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/70'
+            )}
+          >
+            <span className="block text-lg font-bold leading-none text-gray-900 tabular-nums">{option.count}</span>
+            <span className={cn('mt-1 block text-[11px] font-semibold', triage === option.key ? 'text-orange-700' : 'text-gray-500')}>
+              {option.label}
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* Secondary toolbar */}
@@ -247,7 +288,7 @@ function CommentsTab({ brandId }: { brandId: string }) {
           )}
           {!loading && (
             <span className="text-[11px] text-gray-400">
-              {comments.length} comment{comments.length !== 1 ? 's' : ''}
+              {visibleComments.length} of {comments.length} comment{comments.length !== 1 ? 's' : ''}
             </span>
           )}
           <button
@@ -298,25 +339,25 @@ function CommentsTab({ brandId }: { brandId: string }) {
         <div className="flex items-center justify-center py-20 text-gray-400 gap-2">
           <Loader2 size={16} className="animate-spin" /> Loading comments…
         </div>
-      ) : comments.length === 0 ? (
+      ) : visibleComments.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
           <div className="w-14 h-14 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center">
             <MessageSquare size={24} className="text-gray-300" />
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-600">
-              {hasFilters ? 'No comments match this filter' : 'No comments yet'}
+              {hasFilters || triage !== 'all' ? 'No comments match this view' : 'No comments yet'}
             </p>
             <p className="text-xs text-gray-400 mt-0.5">
-              {hasFilters
-                ? 'Try clearing the filters or syncing again.'
+              {hasFilters || triage !== 'all'
+                ? 'Try another view, clear the filters, or sync again.'
                 : 'Click "Sync now" to fetch comments from your published posts.'}
             </p>
           </div>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {comments.map((c) => {
+          {visibleComments.map((c) => {
             const replyCount = c._count?.replies ?? 0;
             const isOpen = expanded.has(c.id);
             const replies = repliesById[c.id];
@@ -521,12 +562,21 @@ function AutoReplyTab({ brandId }: { brandId: string }) {
     } catch {}
   };
 
+  const activeRules = rules.filter((rule) => rule.isEnabled).length;
+
   return (
     <div className="flex flex-col gap-4">
       {/* Header row */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[13px] font-medium text-gray-700">Automatic replies</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[13px] font-medium text-gray-700">Automatic replies</p>
+            {!loading && rules.length > 0 && (
+              <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                {activeRules} active
+              </span>
+            )}
+          </div>
           <p className="text-[11px] text-gray-400 mt-0.5">
             Rules trigger when new comments match your criteria and post a reply instantly.
           </p>
@@ -537,6 +587,11 @@ function AutoReplyTab({ brandId }: { brandId: string }) {
         >
           <Plus size={12} /> Add rule
         </button>
+      </div>
+
+      <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-[11px] leading-relaxed text-amber-800">
+        <AlertCircle size={14} className="mt-0.5 shrink-0" />
+        <span><strong>Review before enabling.</strong> Active rules reply publicly as soon as a comment matches. Use keyword rules for support or sales prompts, and pause any rule when the message needs a human response.</span>
       </div>
 
       {/* Create form */}

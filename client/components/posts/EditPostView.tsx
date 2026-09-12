@@ -78,7 +78,7 @@ export function EditPostView({ postId }: { postId: string }) {
   const allAccounts = useAccountStore((s) => s.accounts);
   const fetchAccounts = useAccountStore((s) => s.fetchAccounts);
   const accounts = allAccounts.filter((a) => a.status === 'Active');
-  const { posts, fetchPosts, updatePost, schedulePost, publishNow, cancelPost } = usePostStore();
+  const { posts, fetchPosts, updatePost, schedulePost, publishNow, retryFailed, cancelPost } = usePostStore();
 
   const post = posts.find((p) => p.id === postId) ?? null;
 
@@ -175,6 +175,15 @@ export function EditPostView({ postId }: { postId: string }) {
     }
     return [...new Set(warnings)];
   }, [mediaItems, selectedAccounts, hasImages, mediaImages.length]);
+
+  const readiness = [
+    { label: 'Title', ready: Boolean(title.trim()) },
+    { label: 'Caption', ready: Boolean(caption.trim()) },
+    { label: 'Account', ready: selectedAccountIds.size > 0 },
+    { label: mode === 'schedule' ? 'Time' : 'Timing', ready: mode !== 'schedule' || Boolean(scheduleDate) },
+    { label: 'Media', ready: mediaWarnings.length === 0 },
+  ];
+  const readyCount = readiness.filter((item) => item.ready).length;
 
   // ─── Library picker handlers ──────────────────────────────────────────────────
 
@@ -337,8 +346,13 @@ export function EditPostView({ postId }: { postId: string }) {
       });
 
       if (mode === 'now') {
-        await publishNow(activeBrand.id, post.id);
-        toast('Post queued for publishing!', 'success');
+        if (post.status === 'Failed') {
+          await retryFailed(activeBrand.id, post.id);
+          toast('Retry started for the failed destinations only.', 'success');
+        } else {
+          await publishNow(activeBrand.id, post.id);
+          toast('Post queued for publishing!', 'success');
+        }
       } else if (mode === 'schedule') {
         await schedulePost(activeBrand.id, post.id, new Date(scheduleDate).toISOString());
         toast('Post rescheduled!', 'success');
@@ -348,6 +362,20 @@ export function EditPostView({ postId }: { postId: string }) {
       router.push('/queue');
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : 'Failed to save changes. Please try again.');
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    if (!activeBrand || !post || post.status !== 'Failed') return;
+    setSubmitError('');
+    setIsSubmitting(true);
+    try {
+      await retryFailed(activeBrand.id, post.id);
+      toast('Retry started for the failed destinations only.', 'success');
+      router.push('/queue');
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : 'Could not retry this post. Please try again.');
       setIsSubmitting(false);
     }
   };
@@ -386,7 +414,7 @@ export function EditPostView({ postId }: { postId: string }) {
   // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 pb-8">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200/80 pb-3 flex-wrap gap-2">
         <div className="flex items-center gap-3">
@@ -431,16 +459,35 @@ export function EditPostView({ postId }: { postId: string }) {
         </div>
       )}
 
+      {post.status === 'Failed' && (
+        <div className="flex flex-col gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-red-800">Publishing needs attention</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-red-700">Relay keeps platforms that already published intact. Saving and choosing “Publish now” retries only the failed destinations.</p>
+          </div>
+          <button type="button" onClick={() => void handleRetry()} disabled={isSubmitting} className="h-8 shrink-0 rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50">
+            Retry failed destinations
+          </button>
+        </div>
+      )}
+
+      {!isReadOnly && <section className="rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50/80 via-white to-amber-50/70 px-4 py-3 shadow-2xs">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="text-xs font-bold text-gray-900">Post readiness <span className="ml-1 font-medium text-gray-400">{readyCount}/{readiness.length} checks complete</span></p><p className="mt-0.5 text-[11px] text-gray-500">Review the essentials before saving your changes.</p></div>
+          <div className="flex flex-wrap gap-1.5">{readiness.map((item) => <span key={item.label} className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold', item.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700')}><Check size={10} strokeWidth={3} className={item.ready ? '' : 'opacity-35'} />{item.label}</span>)}</div>
+        </div>
+      </section>}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* ── Left: Composer ─────────────────────────────────────────────────── */}
         <div className="lg:col-span-7 flex flex-col gap-4">
 
           {/* Title */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-2xs">
-            <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">Post Title</label>
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-2xs">
+            <div className="mb-2 flex items-center justify-between"><label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Post Title</label><span className="text-[10px] font-semibold text-gray-400">{title.length}/200</span></div>
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Product launch announcement" maxLength={200} disabled={isReadOnly}
-              className="w-full h-[38px] px-3 bg-gray-50 border border-gray-200 rounded-lg text-[13px] text-gray-700 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors disabled:opacity-60 disabled:cursor-not-allowed" />
+              className="w-full h-13 px-4 bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-xl text-[15px] font-medium text-gray-800 placeholder:text-gray-400 outline-none shadow-inner shadow-gray-100/40 focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all disabled:opacity-60 disabled:cursor-not-allowed" />
           </div>
 
           {/* Platform selector */}
@@ -485,7 +532,7 @@ export function EditPostView({ postId }: { postId: string }) {
           </div>
 
           {/* Caption */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 shadow-2xs">
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-col gap-3 shadow-2xs">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Post Caption</label>
               <div className="flex items-center gap-2">
@@ -503,8 +550,9 @@ export function EditPostView({ postId }: { postId: string }) {
               </div>
             </div>
             <textarea value={caption} onChange={(e) => setCaption(e.target.value)}
-              placeholder="Write your post content here…" rows={6} disabled={isReadOnly}
-              className="w-full bg-gray-50/80 border border-gray-200 rounded-lg p-3 text-xs text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-colors leading-relaxed resize-none disabled:opacity-60 disabled:cursor-not-allowed" />
+              placeholder="Write your post content here…" rows={8} disabled={isReadOnly}
+              className="w-full min-h-[230px] bg-gradient-to-br from-gray-50/90 to-white border border-gray-200 rounded-xl p-4 text-[14px] text-gray-900 placeholder:text-gray-400 outline-none shadow-inner shadow-gray-100/40 focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all leading-7 resize-y disabled:opacity-60 disabled:cursor-not-allowed" />
+            <div className="-mt-1 flex items-center justify-between text-[11px]"><span className="text-gray-400">Write naturally — Relay will keep platform limits visible above.</span><span className="font-semibold text-gray-400">{caption.length} characters</span></div>
             {!isReadOnly && (
               <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
                 <div className="flex items-center justify-between">
@@ -644,16 +692,16 @@ export function EditPostView({ postId }: { postId: string }) {
           {!isReadOnly && (
             <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-2.5 shadow-2xs">
               <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Post Timing</label>
-              <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {([
                   { id: 'now',      label: 'Post immediately',  icon: Send     },
                   { id: 'schedule', label: 'Schedule for later', icon: Clock    },
                   { id: 'draft',    label: 'Save as draft',      icon: FileText },
                 ] as const).map((opt) => (
                   <button key={opt.id} type="button" onClick={() => setMode(opt.id)}
-                    className={cn('flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all text-left',
-                      mode === opt.id ? 'bg-orange-50 border-orange-300 text-orange-700 font-semibold' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-white')}>
-                    <opt.icon size={13} />
+                    className={cn('flex min-h-12 flex-col items-start justify-center gap-1 rounded-xl border px-3 py-2 text-xs font-medium transition-all text-left',
+                      mode === opt.id ? 'bg-orange-50 border-orange-300 text-orange-700 font-semibold shadow-sm' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-white hover:border-gray-300')}>
+                    <opt.icon size={14} />
                     <span>{opt.label}</span>
                   </button>
                 ))}

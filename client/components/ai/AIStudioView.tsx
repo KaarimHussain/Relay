@@ -415,6 +415,12 @@ function ContentIdeas() {
                           caption: ideaCaption,
                         }} />
                       )}
+                      <Link
+                        href={`/posts/new?caption=${encodeURIComponent(ideaCaption)}&platform=${platform}`}
+                        className="btn-clay-primary h-5.5 px-1.5 text-[11px] gap-1 font-semibold inline-flex items-center"
+                      >
+                        <Send size={10} /> Use
+                      </Link>
                     </div>
                   </div>
                 </div>

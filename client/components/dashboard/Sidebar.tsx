@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Calendar, ListOrdered, BarChart2, Link2,
   Sparkles, LayoutTemplate, Image, Settings, ChevronsUpDown,
   Check, Plus, X, AlertCircle, Loader2, LogOut, MessageSquare,
-  TrendingUp, FlaskConical,
+  TrendingUp, FlaskConical, Inbox,
 } from 'lucide-react';
 import { CreateBrandModal } from '@/components/brands/CreateBrandModal';
 import { useBrandStore, Brand } from '@/store/brand';
@@ -25,6 +25,7 @@ const navItems = [
   { label: 'Trends',             icon: TrendingUp,      href: '/trends',       tag: 'PREVIEW' },
   { label: 'A/B Testing',        icon: FlaskConical,    href: '/ab-testing',   tag: 'PREVIEW' },
   { label: 'Comments',           icon: MessageSquare,   href: '/comments',     tag: null      },
+  { label: 'Inbox',              icon: Inbox,           href: '/inbox',        tag: 'NEW'     },
   { label: 'Connected Accounts', icon: Link2,           href: '/accounts',     tag: null      },
 ];
 

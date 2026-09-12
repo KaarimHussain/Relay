@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Search, SlidersHorizontal, MoreHorizontal, Edit2, Clock,
-  Trash2, Send, Plus, AlertCircle, Loader2, X, ImageIcon,
+  Trash2, Send, Plus, AlertCircle, Loader2, X, ImageIcon, CalendarDays, RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePostStore, Post, PostStatus } from '@/store/post';
@@ -81,9 +81,10 @@ const TABS: { key: FilterStatus; label: string }[] = [
 function RowMenu({
   post, brandId, onClose,
 }: { post: Post; brandId: string; onClose: () => void }) {
-  const { deletePost, publishNow, cancelPost } = usePostStore();
+  const { deletePost, publishNow, retryFailed, cancelPost } = usePostStore();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
+  const canEdit = post.status !== 'Published' && post.status !== 'Publishing';
 
   const run = async (action: () => Promise<void>, msg: string) => {
     setBusy(true);
@@ -94,13 +95,15 @@ function RowMenu({
 
   return (
     <div className="absolute right-0 top-full mt-1 z-30 w-44 bg-white border border-gray-200 rounded-lg shadow-lg py-1 overflow-hidden">
-      <Link
-        href={`/posts/${post.id}/edit`}
-        onClick={onClose}
-        className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors"
-      >
-        <Edit2 size={13} className="text-gray-400" /> Edit post
-      </Link>
+      {canEdit ? (
+        <Link href={`/posts/${post.id}/edit`} onClick={onClose} className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors">
+          <Edit2 size={13} className="text-gray-400" /> Edit post
+        </Link>
+      ) : (
+        <span title="Published posts cannot be edited" className="flex w-full cursor-not-allowed items-center gap-2.5 px-3 py-2 text-[13px] text-gray-300">
+          <Edit2 size={13} /> Edit post
+        </span>
+      )}
       {post.status === 'Scheduled' && (
         <button disabled={busy} onClick={() => run(() => cancelPost(brandId, post.id), 'Post moved back to draft')}
           className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
@@ -108,9 +111,9 @@ function RowMenu({
         </button>
       )}
       {(post.status === 'Draft' || post.status === 'Failed') && (
-        <button disabled={busy} onClick={() => run(async () => { await publishNow(brandId, post.id); }, 'Post queued for publishing')}
+        <button disabled={busy} onClick={() => run(async () => { post.status === 'Failed' ? await retryFailed(brandId, post.id) : await publishNow(brandId, post.id); }, post.status === 'Failed' ? 'Retry started for failed destinations only' : 'Post queued for publishing')}
           className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-50">
-          <Send size={13} /> {post.status === 'Failed' ? 'Retry publish' : 'Publish now'}
+          {post.status === 'Failed' ? <RotateCcw size={13} /> : <Send size={13} />} {post.status === 'Failed' ? 'Retry failed only' : 'Publish now'}
         </button>
       )}
       <div className="my-1 h-px bg-gray-100" />
@@ -125,29 +128,35 @@ function RowMenu({
 // ─── Post row ─────────────────────────────────────────────────────────────────
 
 function QueueRow({
-  post, brandId, selected, onToggle,
-}: { post: Post; brandId: string; selected: boolean; onToggle: () => void }) {
-  const { schedulePost, publishNow } = usePostStore();
+  post, brandId, selected, active, onToggle, onOpen,
+}: { post: Post; brandId: string; selected: boolean; active: boolean; onToggle: () => void; onOpen: () => void }) {
+  const { publishNow, retryFailed } = usePostStore();
   const { toast } = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const cfg = STATUS_CONFIG[post.status];
   const excerpt = post.targets[0]?.caption ?? '—';
   const platforms = [...new Set(post.targets.map((t) => t.account?.platform).filter(Boolean))];
-  const isPublishable = post.status === 'Draft' || post.status === 'Failed';
 
   const handlePublishNow = async () => {
     setBusy(true);
-    try { await publishNow(brandId, post.id); toast('Post queued for publishing', 'success'); }
+    try {
+      if (post.status === 'Failed') {
+        await retryFailed(brandId, post.id);
+        toast('Retry started for failed destinations only', 'success');
+      } else {
+        await publishNow(brandId, post.id);
+        toast('Post queued for publishing', 'success');
+      }
+    }
     catch (e) { toast(e instanceof ApiError ? e.message : 'Failed to publish'); }
     finally { setBusy(false); }
   };
 
   return (
-    <div className={cn('flex items-center gap-2.5 px-4 py-2 transition-colors group relative', selected ? 'bg-orange-50/50' : 'hover:bg-gray-50/70')}>
-      <input type="checkbox" checked={selected} onChange={onToggle}
-        disabled={!isPublishable}
-        className="w-3.5 h-3.5 rounded border-gray-300 accent-orange-500 cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed" />
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onOpen(); }} className={cn('flex w-full items-center gap-2.5 px-3 py-3 text-left transition-colors group relative cursor-pointer', active ? 'bg-orange-50/70 ring-1 ring-inset ring-orange-200' : selected ? 'bg-orange-50/50' : 'hover:bg-gray-50/70')}>
+      <input type="checkbox" checked={selected} onClick={(event) => event.stopPropagation()} onChange={onToggle}
+        className="w-3.5 h-3.5 rounded border-gray-300 accent-orange-500 cursor-pointer shrink-0" />
 
       {/* Media thumbnail */}
       <div className="w-8 h-8 rounded-md shrink-0 overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center">
@@ -204,12 +213,12 @@ function QueueRow({
       {/* Row actions */}
       <div className="relative shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         {(post.status === 'Draft' || post.status === 'Failed') && (
-          <button disabled={busy} onClick={handlePublishNow}
+          <button disabled={busy} onClick={(event) => { event.stopPropagation(); void handlePublishNow(); }}
             className="h-6 px-2 text-[11px] font-medium text-orange-600 bg-orange-50 border border-orange-100 rounded-md hover:bg-orange-100 transition-colors disabled:opacity-50">
-            {busy ? '…' : post.status === 'Failed' ? 'Retry' : 'Publish'}
+            {busy ? '…' : post.status === 'Failed' ? 'Retry failed' : 'Publish'}
           </button>
         )}
-        <button onClick={() => setMenuOpen((v) => !v)}
+        <button onClick={(event) => { event.stopPropagation(); setMenuOpen((v) => !v); }}
           className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
           <MoreHorizontal size={14} />
         </button>
@@ -246,7 +255,7 @@ function EmptyState({ tab }: { tab: FilterStatus }) {
 
 export function QueueView() {
   const activeBrand = useBrandStore((s) => s.activeBrand());
-  const { posts, status, error, fetchPosts, deletePost, publishNow } = usePostStore();
+  const { posts, status, error, fetchPosts, deletePost, publishNow, retryFailed } = usePostStore();
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<FilterStatus>('all');
@@ -254,6 +263,7 @@ export function QueueView() {
   const [sort, setSort] = useState<SortKey>('date-asc');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
 
   const canPublish = (post: Post) => post.status === 'Draft' || post.status === 'Failed';
 
@@ -281,9 +291,12 @@ export function QueueView() {
     return c;
   }, [posts]);
 
-  const allSelected = filtered.length > 0 && selected.size === filtered.length;
+  const focusedPost = filtered.find((post) => post.id === focusedPostId) ?? filtered[0] ?? null;
+
+  const selectablePosts = filtered;
+  const allSelected = selectablePosts.length > 0 && selectablePosts.every((post) => selected.has(post.id));
   const someSelected = selected.size > 0 && !allSelected;
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map((p) => p.id)));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectablePosts.map((post) => post.id)));
   const toggleRow = (id: string) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const hasPublishable = useMemo(() => [...selected].some((id) => filtered.find((p) => p.id === id && canPublish(p))), [selected, filtered]);
@@ -305,8 +318,11 @@ export function QueueView() {
     if (toPublish.length === 0) return;
     setBulkBusy(true);
     try {
-      await Promise.all(toPublish.map((id) => publishNow(activeBrand.id, id)));
-      toast(`Queued ${toPublish.length} draft post${toPublish.length > 1 ? 's' : ''} for publishing`, 'success');
+      await Promise.all(toPublish.map((id) => {
+        const post = filtered.find((item) => item.id === id);
+        return post?.status === 'Failed' ? retryFailed(activeBrand.id, id) : publishNow(activeBrand.id, id);
+      }));
+      toast(`Sent ${toPublish.length} post${toPublish.length > 1 ? 's' : ''} for publishing`, 'success');
       setSelected(new Set());
     } catch { toast('Some posts could not be published'); }
     finally { setBulkBusy(false); }
@@ -341,98 +357,31 @@ export function QueueView() {
   }
 
   return (
-    <div className="flex flex-col bg-white border border-gray-200 rounded-xl">
-      {/* Tabs */}
-      <div className="flex items-center gap-0.5 px-4 pt-3 border-b border-gray-200 overflow-x-auto scrollbar-none">
-        {TABS.map(({ key, label }) => (
-          <button key={key} onClick={() => { setActiveTab(key); setSelected(new Set()); }}
-            className={cn('flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium rounded-t-md -mb-px border-b-2 transition-colors whitespace-nowrap',
-              activeTab === key ? 'border-orange-500 text-orange-600 bg-orange-50/50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50')}>
-            {label}
-            {!!counts[key] && (
-              <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full tabular-nums',
-                activeTab === key ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400')}>
-                {counts[key]}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-2.5 border-b border-gray-100">
-        <div className="flex items-center gap-2 h-8 flex-1 px-3 bg-gray-50 border border-gray-200 rounded-lg">
-          <Search size={13} className="text-gray-400 shrink-0" />
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search posts…"
-            className="flex-1 min-w-0 bg-transparent text-[13px] text-gray-700 placeholder:text-gray-400 outline-none" />
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Select value={sort} onValueChange={(val) => val && setSort(val as SortKey)}>
-            <SelectTrigger className="h-8 bg-white border-gray-200 text-xs text-gray-700 min-w-[130px]">
-              <SelectValue placeholder="Sort order" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="date-asc">Earliest first</SelectItem>
-              <SelectItem value="date-desc">Latest first</SelectItem>
-            </SelectContent>
-          </Select>
-          <Link href="/posts/new" className="btn-clay-primary h-8 px-3 text-xs gap-1 font-semibold inline-flex items-center shrink-0">
-            <Plus size={13} strokeWidth={2.5} /> New post
-          </Link>
-        </div>
-      </div>
-
-      {/* Bulk action bar */}
-      {selected.size > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-orange-50/80 border-b border-orange-100">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-orange-700">{selected.size} post{selected.size > 1 ? 's' : ''} selected</span>
-            <button onClick={() => setSelected(new Set())} className="text-xs text-gray-500 hover:text-gray-800 transition-colors">Clear</button>
+    <div className="min-h-[calc(100vh-3rem)] overflow-hidden border-y border-gray-200 bg-white">
+      <header className="flex flex-col gap-3 border-b border-gray-100 bg-gradient-to-r from-orange-50/75 via-white to-amber-50/50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div><h1 className="text-xl font-bold tracking-tight text-gray-900">Post Queue</h1><p className="mt-0.5 text-sm text-gray-500">Manage all your scheduled, published, and draft posts in one place.</p></div>
+        <Link href="/posts/new" className="btn-clay-primary inline-flex h-9 shrink-0 items-center justify-center gap-1.5 px-3.5 text-xs font-semibold"><Plus size={14} strokeWidth={2.5} /> New post</Link>
+      </header>
+      <div className="grid min-h-[680px] grid-cols-1 lg:grid-cols-[190px_minmax(330px,0.9fr)_minmax(320px,1.1fr)]">
+        <aside className="border-b border-gray-100 bg-gray-50/70 p-3 lg:border-b-0 lg:border-r">
+          <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Post status</p>
+          <div className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+            {TABS.map(({ key, label }) => <button key={key} onClick={() => { setActiveTab(key); setSelected(new Set()); setFocusedPostId(null); }} className={cn('flex min-w-max items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-colors', activeTab === key ? 'bg-white text-orange-600 shadow-sm ring-1 ring-orange-100' : 'text-gray-600 hover:bg-white hover:text-gray-900')}><span className={cn('h-1.5 w-1.5 rounded-full', key === 'Failed' ? 'bg-red-500' : key === 'Scheduled' ? 'bg-amber-400' : key === 'Published' ? 'bg-emerald-500' : key === 'Draft' ? 'bg-gray-400' : 'bg-orange-400')} /><span className="flex-1">{label}</span><span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums', activeTab === key ? 'bg-orange-100 text-orange-600' : 'bg-gray-200/70 text-gray-400')}>{counts[key] ?? 0}</span></button>)}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button disabled={bulkBusy || !hasPublishable} onClick={handleBulkPublish}
-              className="btn-clay-primary h-7 px-2.5 text-xs gap-1 inline-flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
-              <Send size={12} /> Publish Draft Posts
-            </button>
-            <button disabled={bulkBusy} onClick={handleBulkDelete}
-              className="h-7 px-2.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1 disabled:opacity-50">
-              <Trash2 size={12} /> Delete
-            </button>
-          </div>
-        </div>
-      )}
+          <div className="mt-5 hidden rounded-xl border border-orange-100 bg-orange-50/70 p-3 lg:block"><CalendarDays size={16} className="text-orange-500" /><p className="mt-2 text-xs font-bold text-gray-800">Plan ahead</p><p className="mt-0.5 text-[11px] leading-relaxed text-gray-500">Use Calendar to see the full publishing rhythm.</p><Link href="/calendar" className="mt-2 inline-block text-[11px] font-semibold text-orange-600 hover:underline">Open calendar →</Link></div>
+        </aside>
 
-      {/* Column header */}
-      {filtered.length > 0 && (
-        <div className="flex items-center gap-2.5 px-4 py-1.5 bg-gray-50 border-b border-gray-100">
-          <input type="checkbox" checked={allSelected} onChange={toggleAll}
-            ref={(el) => { if (el) el.indeterminate = someSelected; }}
-            className="w-3.5 h-3.5 rounded border-gray-300 accent-orange-500 cursor-pointer shrink-0" />
-          <div className="w-8 shrink-0" />
-          <span className="flex-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Post</span>
-        </div>
-      )}
+        <section className="flex min-h-0 flex-col border-b border-gray-100 lg:border-b-0 lg:border-r">
+          <div className="border-b border-gray-100 p-3"><div className="flex h-9 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3"><Search size={14} className="shrink-0 text-gray-400" /><input type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search posts…" className="min-w-0 flex-1 bg-transparent text-xs text-gray-700 outline-none placeholder:text-gray-400" /></div><div className="mt-2 flex items-center justify-between gap-2"><span className="text-[11px] font-semibold text-gray-400">{filtered.length} post{filtered.length !== 1 ? 's' : ''}</span><Select value={sort} onValueChange={(value) => value && setSort(value as SortKey)}><SelectTrigger className="h-7 min-w-[124px] border-gray-200 bg-white text-[11px] text-gray-600"><SelectValue placeholder="Sort order" /></SelectTrigger><SelectContent><SelectItem value="date-asc">Earliest first</SelectItem><SelectItem value="date-desc">Latest first</SelectItem></SelectContent></Select></div></div>
+          {selected.size > 0 && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-orange-100 bg-orange-50 px-3 py-2"><span className="text-[11px] font-bold text-orange-700">{selected.size} selected</span><div className="flex gap-1.5"><button onClick={() => setSelected(new Set())} className="text-[11px] font-semibold text-gray-500 hover:text-gray-800">Clear</button><button disabled={bulkBusy || !hasPublishable} onClick={() => void handleBulkPublish()} className="text-[11px] font-semibold text-orange-600 disabled:opacity-50">Publish</button><button disabled={bulkBusy} onClick={() => void handleBulkDelete()} className="text-[11px] font-semibold text-red-600 disabled:opacity-50">Delete</button></div></div>}
+          {filtered.length > 0 && <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50/70 px-3 py-2"><input type="checkbox" checked={allSelected} onChange={toggleAll} ref={(element) => { if (element) element.indeterminate = someSelected; }} className="h-3.5 w-3.5 rounded border-gray-300 accent-orange-500" /><span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Posts</span></div>}
+          <div className="min-h-0 flex-1 overflow-y-auto">{filtered.length === 0 ? <EmptyState tab={activeTab} /> : <div className="divide-y divide-gray-100">{filtered.map((post) => <QueueRow key={post.id} post={post} brandId={activeBrand.id} selected={selected.has(post.id)} active={focusedPost?.id === post.id} onOpen={() => setFocusedPostId(post.id)} onToggle={() => toggleRow(post.id)} />)}</div>}</div>
+        </section>
 
-      {/* Rows */}
-      {filtered.length === 0
-        ? <EmptyState tab={activeTab} />
-        : <div className="divide-y divide-gray-100">
-          {filtered.map((post) => (
-            <QueueRow key={post.id} post={post} brandId={activeBrand.id}
-              selected={selected.has(post.id)} onToggle={() => toggleRow(post.id)} />
-          ))}
-        </div>
-      }
-
-      {/* Footer */}
-      {filtered.length > 0 && (
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50/50">
-          <span className="text-[12px] text-gray-400">
-            {filtered.length} of {posts.length} post{posts.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-      )}
+        <aside className="hidden min-h-0 flex-col bg-white lg:flex">
+          {focusedPost ? <><div className="flex items-start justify-between border-b border-gray-100 p-4"><div className="min-w-0"><div className="mb-2 flex items-center gap-2"><span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold', STATUS_CONFIG[focusedPost.status].bg, STATUS_CONFIG[focusedPost.status].text)}><span className={cn('h-1.5 w-1.5 rounded-full', STATUS_CONFIG[focusedPost.status].dot)} />{STATUS_CONFIG[focusedPost.status].label}</span><span className="text-[10px] text-gray-400">{formatScheduledAt(focusedPost.scheduledAt)}</span></div><h2 className="truncate text-sm font-bold text-gray-900">{focusedPost.title}</h2></div><Link href={`/posts/${focusedPost.id}/edit`} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-orange-600"><Edit2 size={15} /></Link></div><div className="min-h-0 flex-1 overflow-y-auto p-4"><div className="overflow-hidden rounded-xl border border-gray-200 bg-white"><div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2.5"><div className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: activeBrand.colorHex }}>{activeBrand.name[0].toUpperCase()}</div><div><p className="text-xs font-semibold text-gray-800">{activeBrand.name}</p><p className="text-[10px] text-gray-400">Preview · Public</p></div></div>{focusedPost.media[0]?.url && <img src={focusedPost.media[0].url} alt="Post media" className="max-h-56 w-full object-cover" />}<p className="whitespace-pre-wrap px-3 py-3 text-xs leading-relaxed text-gray-700">{focusedPost.targets[0]?.caption || 'No caption added yet.'}</p></div><div className="mt-4"><p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">Publishing to</p><div className="flex flex-wrap gap-1.5">{[...new Set(focusedPost.targets.map((target) => target.account?.platform).filter(Boolean))].map((platform) => <span key={platform} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] font-medium text-gray-600">{platform}</span>)}</div></div>{focusedPost.status === 'Failed' && <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3"><p className="text-xs font-bold text-red-700">Publishing needs attention</p><p className="mt-1 text-[11px] leading-relaxed text-red-600">{focusedPost.targets.find((target) => target.errorMessage)?.errorMessage ?? 'Open the post to review and retry publishing.'}</p></div>}</div><div className="flex gap-2 border-t border-gray-100 p-3"><Link href={`/posts/${focusedPost.id}/edit`} className="btn-clay-secondary flex h-8 flex-1 items-center justify-center gap-1.5 px-3 text-xs font-semibold"><Edit2 size={13} /> Edit</Link>{(focusedPost.status === 'Draft' || focusedPost.status === 'Failed') && <button onClick={() => void publishNow(activeBrand.id, focusedPost.id)} className="btn-clay-primary flex h-8 flex-1 items-center justify-center gap-1.5 px-3 text-xs font-semibold"><Send size={13} /> {focusedPost.status === 'Failed' ? 'Retry' : 'Publish'}</button>}</div></> : <div className="flex h-full flex-col items-center justify-center px-8 text-center"><ImageIcon size={24} className="text-gray-200" /><p className="mt-3 text-xs font-semibold text-gray-500">Select a post to inspect it</p><p className="mt-1 text-[11px] leading-relaxed text-gray-400">Its content, channels, status, and available actions will appear here.</p></div>}
+        </aside>
+      </div>
     </div>
   );
 }

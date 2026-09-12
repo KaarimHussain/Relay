@@ -46,6 +46,10 @@ export class PostsController {
     return this.posts.publishNow(brandId, postId);
   }
 
+  @Post(':postId/retry') retryFailed(@Param('brandId') brandId: string, @Param('postId') postId: string) {
+    return this.posts.retryFailed(brandId, postId);
+  }
+
   @Post(':postId/cancel') cancel(@Param('brandId') brandId: string, @Param('postId') postId: string) {
     return this.posts.cancel(brandId, postId);
   }

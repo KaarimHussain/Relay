@@ -423,7 +423,8 @@ export default function AccountsPage() {
       {/* Page header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-[22px] font-bold text-gray-900 tracking-tight">Connected Accounts</h1>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-orange-600">Publishing foundation</p>
+          <h1 className="mt-1 text-xl sm:text-[22px] font-bold text-gray-900 tracking-tight">Connected Accounts</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Manage social accounts for{' '}
             <span className="font-semibold text-gray-700">{activeBrand?.name ?? 'your brand'}</span>.
@@ -459,8 +460,8 @@ export default function AccountsPage() {
       <div className="flex items-center gap-2.5 px-4 py-2.5 bg-orange-50 border border-orange-100 rounded-xl">
         <Link2 size={13} className="text-orange-400 shrink-0" />
         <p className="text-[12px] text-orange-600">
-          <span className="font-semibold">Accounts are brand-scoped.</span>{' '}
-          Switch brands from the sidebar to manage a different workspace.
+          <span className="font-semibold">Accounts are brand-scoped and used only when you publish.</span>{' '}
+          Switch brands from the sidebar to manage another workspace; use the refresh icon to check an account before a campaign.
         </p>
       </div>
 

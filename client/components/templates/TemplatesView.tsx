@@ -219,7 +219,7 @@ function TemplateCard({
   const placeholders = [...new Set(template.caption.match(/\[[^\]]+\]/g) ?? [])];
 
   return (
-    <div className="relative flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-gray-300 hover:shadow-sm transition-all group">
+    <div className="relative flex flex-col bg-white border border-gray-200 rounded-2xl overflow-hidden hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md transition-all group">
       {/* Category stripe */}
       <div className={cn('h-1 w-full shrink-0', categoryStripe(template.category))} />
 
@@ -274,7 +274,7 @@ function TemplateCard({
           ))}
         </div>
         <button onClick={onUse}
-          className="btn-clay-secondary h-7 px-3 text-[12px] font-semibold gap-1.5 text-gray-700 inline-flex items-center">
+          className="btn-clay-primary h-7 px-3 text-[12px] font-semibold gap-1.5 inline-flex items-center">
           <Send size={11} /> Use template
         </button>
       </div>
@@ -430,6 +430,10 @@ export function TemplatesView() {
   return (
     <>
       <div className="flex flex-col gap-5">
+        <section className="flex flex-col gap-3 rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50/80 via-white to-amber-50/60 px-4 py-4 shadow-2xs sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="text-sm font-bold text-gray-900">Your reusable playbook</p><p className="mt-0.5 text-xs text-gray-500">Save the structures that work, then start a post with one click.</p></div>
+          <div className="rounded-xl bg-white px-3 py-2 text-center shadow-sm ring-1 ring-orange-100"><p className="text-lg font-bold text-orange-600">{templates.length}</p><p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Templates</p></div>
+        </section>
         {/* Toolbar */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 h-8 w-64 px-3 bg-white border border-gray-200 rounded-lg shadow-2xs">
@@ -476,7 +480,7 @@ export function TemplatesView() {
         </div>
 
         {/* Grid */}
-        <div className="grid grid-cols-3 gap-4 relative">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 relative">
           {filtered.length === 0 ? (
             <EmptyState
               filtered={activeCategory !== 'all' || search.trim().length > 0}

@@ -85,6 +85,16 @@ export function buildPostTools(
       },
     },
     {
+      name: 'retry_failed_post',
+      description:
+        'Retry only the failed publishing destinations for a post. Already-published destinations are never posted again.',
+      inputShape: { brandId: z.string(), postId: z.string() },
+      handler: async ({ brandId, postId }) => {
+        await ownership.assertBrandAccess(ctx.userId, brandId);
+        return posts.retryFailed(brandId, postId);
+      },
+    },
+    {
       name: 'cancel_scheduled_post',
       description:
         'Cancel a scheduled post (moves it back to Draft). Does NOT delete the post.',

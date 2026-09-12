@@ -44,6 +44,7 @@ interface PostState {
   deletePost: (brandId: string, postId: string) => Promise<void>;
   schedulePost: (brandId: string, postId: string, scheduledAt: string) => Promise<Post>;
   publishNow: (brandId: string, postId: string) => Promise<Post>;
+  retryFailed: (brandId: string, postId: string) => Promise<Post>;
   cancelPost: (brandId: string, postId: string) => Promise<void>;
   reset: () => void;
 }
@@ -90,6 +91,12 @@ export const usePostStore = create<PostState>((set, get) => ({
 
   publishNow: async (brandId, postId) => {
     const updated = await api.post<Post>(`/brands/${brandId}/posts/${postId}/publish-now`);
+    set((s) => ({ posts: s.posts.map((p) => (p.id === postId ? updated : p)) }));
+    return updated;
+  },
+
+  retryFailed: async (brandId, postId) => {
+    const updated = await api.post<Post>(`/brands/${brandId}/posts/${postId}/retry`);
     set((s) => ({ posts: s.posts.map((p) => (p.id === postId ? updated : p)) }));
     return updated;
   },

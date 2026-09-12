@@ -531,8 +531,8 @@ export function MediaLibraryView() {
                   <button onClick={() => setSelected(new Set())} className="text-[12px] text-gray-400 hover:text-gray-600 transition-colors">Clear</button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Link href="/posts/new" className="flex items-center gap-1.5 h-7 px-3 text-[12px] font-medium text-orange-600 bg-white border border-orange-200 rounded-md hover:bg-orange-50 transition-colors">
-                    <Send size={11} /> Use in post
+                  <Link href={`/posts/new?mediaIds=${encodeURIComponent([...selected].join(','))}`} className="flex items-center gap-1.5 h-7 px-3 text-[12px] font-medium text-orange-600 bg-white border border-orange-200 rounded-md hover:bg-orange-50 transition-colors">
+                    <Send size={11} /> Use selected in post
                   </Link>
                   <button onClick={handleBulkDelete}
                     className="flex items-center gap-1.5 h-7 px-3 text-[12px] font-medium text-red-600 bg-red-50 border border-red-100 rounded-md hover:bg-red-100 transition-colors">

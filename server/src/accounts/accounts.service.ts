@@ -65,6 +65,13 @@ export class AccountsService {
     return { accountId, status, platformHandle: account.platformHandle };
   }
 
+  async markExpired(accountId: string) {
+    await this.prisma.socialAccount.update({
+      where: { id: accountId },
+      data: { status: AccountStatus.Expired },
+    });
+  }
+
   // Manual LinkedIn company page connection (workaround for Community Management API restriction).
   // Reuses the personal LinkedIn account's token since posting to a company page uses the
   // member token with an org author URN — no separate token needed.
@@ -127,6 +134,14 @@ export class AccountsService {
   // Used internally by the publishing worker — returns decrypted token
   async getDecryptedAccount(accountId: string) {
     const account = await this.prisma.socialAccount.findUniqueOrThrow({ where: { id: accountId } });
+    const expired = account.tokenExpiresAt && account.tokenExpiresAt < new Date();
+    if (account.status === AccountStatus.Expired || expired) {
+      if (account.status !== AccountStatus.Expired) await this.markExpired(account.id);
+      throw new BadRequestException(`Your ${account.platform} connection has expired. Reconnect ${account.platformHandle} before publishing.`);
+    }
+    if (account.status !== AccountStatus.Active) {
+      throw new BadRequestException(`Your ${account.platform} connection is not active. Reconnect it before publishing.`);
+    }
     return {
       ...account,
       accessToken: decrypt(account.accessToken),

@@ -37,7 +37,7 @@ export function PostTable() {
   const activeBrand = useBrandStore((s) => s.activeBrand());
   const posts = usePostStore((s) => s.posts);
   const postStoreStatus = usePostStore((s) => s.status);
-  const { deletePost, publishNow } = usePostStore();
+  const { deletePost, publishNow, retryFailed } = usePostStore();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -63,8 +63,11 @@ export function PostTable() {
     if (!activeBrand) return;
     const toPublish = [...selected].filter((id) => recent.find((p) => p.id === id && canPublish(p)));
     if (toPublish.length === 0) return;
-    await Promise.all(toPublish.map((id) => publishNow(activeBrand.id, id).catch(() => null)));
-    toast(`${toPublish.length} draft post(s) queued for publishing`, 'success');
+    await Promise.all(toPublish.map((id) => {
+      const post = recent.find((item) => item.id === id);
+      return (post?.status === 'Failed' ? retryFailed(activeBrand.id, id) : publishNow(activeBrand.id, id)).catch(() => null);
+    }));
+    toast(`${toPublish.length} post${toPublish.length === 1 ? '' : 's'} sent for publishing`, 'success');
     setSelected(new Set());
   };
 
@@ -220,7 +223,7 @@ export function PostTable() {
                 <button onClick={() => setSelected(new Set())} className="text-xs text-gray-500 hover:text-gray-800 transition-colors font-medium">Clear</button>
               </div>
               <div className="flex items-center gap-1.5">
-                <button onClick={handlePublish} disabled={publishableCount === 0} className={cn("btn-clay-primary h-7 px-2.5 text-xs", publishableCount === 0 && "opacity-50 cursor-not-allowed")}>Publish Draft Posts</button>
+                <button onClick={handlePublish} disabled={publishableCount === 0} className={cn("btn-clay-primary h-7 px-2.5 text-xs", publishableCount === 0 && "opacity-50 cursor-not-allowed")}>Publish / retry</button>
                 <button onClick={handleDelete} className="h-7 px-2.5 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">Delete</button>
               </div>
             </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   Hash, Music2, TrendingUp, ArrowUpRight, Copy,
   Sparkles, Info, Flame, RefreshCw, Loader2, Link2,
@@ -430,10 +431,16 @@ export function TrendsView() {
                       <div className="flex items-center justify-between gap-2">
                         <button
                           onClick={() => copyTag(h.tag)}
-                          className="btn-clay-secondary flex-1 h-8 text-xs inline-flex items-center justify-center gap-1.5"
+                          className="btn-clay-secondary h-8 px-2.5 text-xs inline-flex items-center justify-center gap-1.5"
                         >
                           <Copy size={12} /> Copy hashtag
                         </button>
+                        <Link
+                          href={`/posts/new?caption=${encodeURIComponent(h.tag)}&platform=${encodeURIComponent(h.platform)}`}
+                          className="h-8 px-2.5 rounded-lg border border-orange-200 bg-orange-50 text-[11px] font-semibold text-orange-700 inline-flex items-center justify-center hover:bg-orange-100 transition-colors"
+                        >
+                          Use in post
+                        </Link>
                         {h.updatedAt && (
                           <span className="text-[10px] text-gray-400 shrink-0">{relativeTime(h.updatedAt)}</span>
                         )}

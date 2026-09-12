@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FlaskConical, Plus, Trophy, X, Info, Trash2, Play, Clock,
 } from 'lucide-react';
@@ -253,6 +253,13 @@ export function ABTestingView() {
     persist(tests.filter(t => t.id !== id));
   };
 
+  const brandTests = useMemo(
+    () => activeBrand ? tests.filter((test) => test.brandId === activeBrand.id) : [],
+    [tests, activeBrand?.id],
+  );
+  const runningTests = brandTests.filter((test) => test.status === 'running').length;
+  const completedTests = brandTests.filter((test) => test.status === 'completed').length;
+
   if (!loaded) return null;
 
   return (
@@ -271,13 +278,28 @@ export function ABTestingView() {
         <p className="text-xs text-gray-500">
           {activeBrand ? <>Tests for <span className="font-semibold text-gray-700">{activeBrand.name}</span></> : 'Select a brand to organize your tests'}
         </p>
-        <button onClick={() => setShowCreate(true)} className="btn-clay-primary h-8 px-3 text-xs inline-flex items-center gap-1.5">
+        <button onClick={() => setShowCreate(true)} disabled={!activeBrand} className="btn-clay-primary h-8 px-3 text-xs inline-flex items-center gap-1.5 disabled:opacity-50">
           <Plus size={12} /> Create test
         </button>
       </div>
 
+      {activeBrand && (
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: 'Total tests', value: brandTests.length, tint: 'bg-gray-50 border-gray-200 text-gray-900' },
+            { label: 'In progress', value: runningTests, tint: 'bg-amber-50 border-amber-200 text-amber-800' },
+            { label: 'Completed', value: completedTests, tint: 'bg-emerald-50 border-emerald-200 text-emerald-800' },
+          ].map((item) => (
+            <div key={item.label} className={cn('rounded-xl border px-3 py-2.5', item.tint)}>
+              <p className="text-lg font-bold leading-none tabular-nums">{item.value}</p>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide opacity-70">{item.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* List */}
-      {tests.length === 0 ? (
+      {brandTests.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
           <FlaskConical size={32} className="text-gray-200" />
           <div>
@@ -287,7 +309,7 @@ export function ABTestingView() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {tests.map((t) => (
+          {brandTests.map((t) => (
             <div key={t.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 shadow-2xs">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">

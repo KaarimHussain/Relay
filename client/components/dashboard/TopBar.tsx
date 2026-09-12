@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Bell, Menu, XCircle, AlertTriangle, CheckCheck, CheckCircle2, CalendarClock } from 'lucide-react';
+import { Bell, Menu, XCircle, AlertTriangle, CheckCheck, CheckCircle2, CalendarClock, LogOut } from 'lucide-react';
 import { NewPostButton } from '@/components/posts/NewPostButton';
 import { useBrandStore } from '@/store/brand';
 import { useAccountStore } from '@/store/account';
@@ -38,6 +38,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
   const posts = usePostStore((s) => s.posts);
   const fetchPosts = usePostStore((s) => s.fetchPosts);
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
 
   useEffect(() => {
     if (activeBrand?.id) {
@@ -142,6 +143,11 @@ export function TopBar({ onMenuClick }: TopBarProps) {
     [notifications, lastSeen],
   );
 
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/login';
+  };
+
   // Mark everything seen when the panel closes (so unread items stay highlighted while open)
   useEffect(() => {
     if (wasOpen.current && !open) markAllSeen();
@@ -166,6 +172,13 @@ export function TopBar({ onMenuClick }: TopBarProps) {
 
         {/* Right actions */}
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="hidden sm:inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <LogOut size={13} /> Log out
+          </button>
           <div className="relative" ref={panelRef}>
             <button
               onClick={() => setOpen(v => !v)}

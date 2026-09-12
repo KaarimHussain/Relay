@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Loader2, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api, ApiError } from '@/lib/api';
 import { useBrandStore } from '@/store/brand';
+import { useAuthStore } from '@/store/auth';
 
 interface Brand { id: string; name: string; colorHex: string; slug: string; [key: string]: unknown; }
 
@@ -23,6 +24,7 @@ const BRAND_COLORS = [
 export default function OnboardingPage() {
   const router = useRouter();
   const addBrand = useBrandStore((s) => s.addBrand);
+  const logout = useAuthStore((s) => s.logout);
   const [name, setName] = useState('');
   const [selectedColor, setSelectedColor] = useState(BRAND_COLORS[0]);
   const [submitting, setSubmitting] = useState(false);
@@ -39,21 +41,30 @@ export default function OnboardingPage() {
     try {
       const brand = await api.post<Brand>('/brands', { name: trimmed, colorHex: selectedColor.hex });
       addBrand(brand as any);
-      router.push('/onboarding/accounts');
+      router.push('/onboarding/preferences');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to create brand. Please try again.');
       setSubmitting(false);
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    router.replace('/login');
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen py-8 px-4 bg-[#F8F9FA]">
-      {/* Logo */}
-      <div className="flex items-center gap-2 mb-6">
-        <svg width="30" height="30" viewBox="0 0 256 256" fill="none">
-          <path d="M 128 256 L 64 256 L 64 192 L 128 192 Z M 256 256 L 192 256 L 192 192 L 256 192 Z M 64 192 L 0 192 L 0 128 L 64 128 Z M 192 192 L 128 192 L 128 128 L 192 128 Z M 128 128 L 64 128 L 64 64 L 128 64 Z M 256 128 L 192 128 L 192 64 L 256 64 Z M 64 64 L 0 64 L 0 0 L 64 0 Z M 192 64 L 128 64 L 128 0 L 192 0 Z" fill="#1A1A1A"/>
-        </svg>
-        <span className="text-lg font-bold text-gray-900 tracking-tight">Relay</span>
+      <div className="w-full max-w-[400px] flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <svg width="30" height="30" viewBox="0 0 256 256" fill="none">
+            <path d="M 128 256 L 64 256 L 64 192 L 128 192 Z M 256 256 L 192 256 L 192 192 L 256 192 Z M 64 192 L 0 192 L 0 128 L 64 128 Z M 192 192 L 128 192 L 128 128 L 192 128 Z M 128 128 L 64 128 L 64 64 L 128 64 Z M 256 128 L 192 128 L 192 64 L 256 64 Z M 64 64 L 0 64 L 0 0 L 64 0 Z M 192 64 L 128 64 L 128 0 L 192 0 Z" fill="#1A1A1A"/>
+          </svg>
+          <span className="text-lg font-bold text-gray-900 tracking-tight">Relay</span>
+        </div>
+        <button type="button" onClick={handleLogout} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-500 transition-colors hover:bg-white hover:text-red-600">
+          <LogOut size={13} /> Log out
+        </button>
       </div>
 
       {/* Steps indicator */}
@@ -65,7 +76,12 @@ export default function OnboardingPage() {
         <div className="w-8 h-px bg-gray-200" />
         <div className="flex items-center gap-1.5 opacity-50">
           <div className="w-5.5 h-5.5 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-[11px] font-bold">2</div>
-          <span className="text-xs font-medium text-gray-500">Connect accounts</span>
+          <span className="text-xs font-medium text-gray-500">Preferences</span>
+        </div>
+        <div className="w-8 h-px bg-gray-200" />
+        <div className="flex items-center gap-1.5 opacity-50">
+          <div className="w-5.5 h-5.5 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-[11px] font-bold">3</div>
+          <span className="text-xs font-medium text-gray-500">Accounts</span>
         </div>
       </div>
 
@@ -139,7 +155,7 @@ export default function OnboardingPage() {
 
           {/* Footer */}
           <div className="flex items-center justify-between px-6 py-3 bg-gray-50 border-t border-gray-100">
-            <p className="text-[11px] text-gray-400 font-medium">Step 1 of 2</p>
+            <p className="text-[11px] text-gray-400 font-medium">Step 1 of 3</p>
             <button
               type="submit"
               disabled={!name.trim() || submitting}
